@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Project guides and tracker (working documents, not part of the published repo)
+/guides/

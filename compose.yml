@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: "postgres:latest"
+    container_name: clowder-db
+
+    ports:
+      - 5432:5432
+
+    environment:
+      POSTGRES_USER: clowder_user
+      POSTGRES_PASSWORD: clowder_password
+      POSTGRES_DB: clowder_db
+
+    volumes:
+      - clowder-pgdata:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clowder_user -d clowder_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+
+volumes:
+  clowder-pgdata:

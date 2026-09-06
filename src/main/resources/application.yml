@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: clowder
+  datasource:
+    url: jdbc:postgresql://localhost:5432/clowder_db
+    username: clowder_user
+    password: clowder_password
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+  flyway:
+    locations: classpath:db/migration
+
+management:
+  endpoints.web.exposure.include: health,info
+  endpoint.health.show-details: always
