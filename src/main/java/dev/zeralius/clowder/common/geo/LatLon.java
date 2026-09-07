@@ -8,7 +8,7 @@ public record LatLon(BigDecimal latitude, BigDecimal longitude) {
 
     private static final int SCALE = 6;
     private static final BigDecimal MAX_LAT = new BigDecimal("90");
-    private static final BigDecimal Max_LON = new BigDecimal("180");
+    private static final BigDecimal MAX_LON = new BigDecimal("180");
 
     public LatLon {
         Objects.requireNonNull(latitude, "latitude");
@@ -17,7 +17,7 @@ public record LatLon(BigDecimal latitude, BigDecimal longitude) {
         if(latitude.abs().compareTo(MAX_LAT) > 0) {
             throw new IllegalArgumentException("latitude out of range: " + latitude);
         }
-        if(longitude.abs().compareTo(Max_LON) > 0) {
+        if(longitude.abs().compareTo(MAX_LON) > 0) {
             throw new IllegalArgumentException("longitude out of range: " + longitude);
         }
 
