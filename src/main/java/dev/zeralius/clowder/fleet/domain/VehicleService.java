@@ -29,7 +29,7 @@ public class VehicleService {
     public VehicleResponse findById(Long id) {
         return vehicles.findByIdWithDepot(id)
                 .map(VehicleMapper::toResponse)
-                .orElseThrow(() -> new NotFoundException("vehicle", id));
+                .orElseThrow(() -> new NotFoundException("Vehicle", id));
     }
 
     public PageResponse<VehicleResponse> findAll(Pageable pageable) {
@@ -41,7 +41,7 @@ public class VehicleService {
      * Backs the cross-module facade. A missing depot is a 404 rather than an empty list: asking for
      * the vehicles at depot 9999 is a different mistake from a depot that happens to have none.
      */
-    public List<VehicleResponse> findActiveVehicles(Long depotId) {
+    public List<VehicleResponse> findActiveVehiclesAt(Long depotId) {
         if(!depots.existsById(depotId)) {
             throw new NotFoundException("Depot", depotId);
         }

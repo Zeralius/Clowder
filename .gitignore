@@ -37,3 +37,7 @@ build/
 
 # Project guides and tracker (working documents, not part of the published repo)
 /guides/
+
+### JVM crash dumps ###
+hs_err_pid*.log
+replay_pid*.log

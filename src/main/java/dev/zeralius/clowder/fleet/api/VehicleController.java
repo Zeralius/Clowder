@@ -2,9 +2,7 @@ package dev.zeralius.clowder.fleet.api;
 
 
 import dev.zeralius.clowder.common.web.PageResponse;
-import dev.zeralius.clowder.fleet.domain.Vehicle;
 import dev.zeralius.clowder.fleet.domain.VehicleService;
-import dev.zeralius.clowder.fleet.persistence.VehicleRepository;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;

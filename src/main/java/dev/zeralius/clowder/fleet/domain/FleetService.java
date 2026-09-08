@@ -28,6 +28,6 @@ public class FleetService implements FleetFacade {
 
     @Override
     public List<VehicleResponse> findActiveVehiclesAt(Long depotId) {
-        return vehicles.findActiveVehicles(depotId);
+        return vehicles.findActiveVehiclesAt(depotId);
     }
 }

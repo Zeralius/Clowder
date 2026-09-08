@@ -1,6 +1,5 @@
 package dev.zeralius.clowder.common.error;
 
-import jakarta.persistence.OptimisticLockException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
