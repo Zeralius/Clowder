@@ -1,5 +1,6 @@
 package dev.zeralius.clowder.fleet.domain;
 
+import dev.zeralius.clowder.fleet.api.DepotSummary;
 import dev.zeralius.clowder.fleet.api.VehicleResponse;
 
 public class VehicleMapper {
@@ -10,7 +11,7 @@ public class VehicleMapper {
         var depot = vehicle.getDepot();
         return new VehicleResponse(
                 vehicle.getId(),
-                new VehicleResponse.DepotSummary(
+                new DepotSummary(
                         depot.getId(),
                         depot.getCode(),
                         depot.getName()

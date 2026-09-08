@@ -13,6 +13,4 @@ public record VehicleResponse(
         int shiftMinutes,
         BigDecimal avgSpeedKph,
         boolean active
-) {
-    public record DepotSummary(Long id, String code, String name) {}
-}
+) {}
