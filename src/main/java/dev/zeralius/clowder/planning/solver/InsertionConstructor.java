@@ -119,6 +119,8 @@ final class InsertionConstructor {
         final var length = route.length;
         final var serviceStarts = new int[length];
         RouteCalculator.serviceStarts(route, length, vehicle, instance, serviceStarts);
+        // Once per route revision, not per candidate: the route does not change inside this scan.
+        final var slack = ForwardTimeSlack.compute(route, length, vehicle, instance);
 
         final var stops = instance.stops();
         final var matrix = instance.matrix();
@@ -138,6 +140,14 @@ final class InsertionConstructor {
             var bestAt = -1;
 
             for (var at = 0; at <= length; at++) {
+                // Cheap rejection first: if the stop after the gap would be pushed past its slack, no
+                // array copy and no scan. Slack rejects; the full scan below still confirms.
+                if (at < length
+                        && ForwardTimeSlack.pushOnNext(route, length, at, candidate, serviceStarts, vehicle, instance)
+                                > slack[at]) {
+                    continue;
+                }
+
                 final var trial = RouteCalculator.withInsertion(route, length, at, candidate);
                 if (!RouteCalculator.isFeasible(trial, trial.length, vehicle, instance)) {
                     continue;
