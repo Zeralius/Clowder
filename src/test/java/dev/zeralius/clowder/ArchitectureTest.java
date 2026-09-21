@@ -45,4 +45,11 @@ public class ArchitectureTest {
                     .should().dependOnClassesThat()
                     .resideInAnyPackage("..fleet..", "..consignment..", "..planning..", "..execution..")
                     .because("common is the shared kernel and must stay dependency-free");
+
+    @ArchTest
+    static final ArchRule modulesDoNotShareEntities =
+            noClasses().that().resideInAPackage("..consignment..")
+                    .should().dependOnClassesThat()
+                    .resideInAPackage("..fleet.domain..")
+                    .because("modules talk through facades and ids, never entities");
 }
