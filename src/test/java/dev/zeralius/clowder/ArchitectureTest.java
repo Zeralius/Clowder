@@ -43,7 +43,7 @@ public class ArchitectureTest {
     static final ArchRule commonDependsOnNothing =
             noClasses().that().resideInAPackage("..common..")
                     .should().dependOnClassesThat()
-                    .resideInAnyPackage("..fleet..", "..consignment..", "..planning..", "..execution..")
+                    .resideInAnyPackage("..fleet..", "..consignment..", "..importer..", "..planning..", "..execution..")
                     .because("common is the shared kernel and must stay dependency-free");
 
     @ArchTest
