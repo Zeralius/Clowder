@@ -2,11 +2,11 @@ package dev.zeralius.clowder.fleet.domain;
 
 import dev.zeralius.clowder.fleet.api.DepotResponse;
 
-public class DepotMapper {
+final class DepotMapper {
 
     private DepotMapper() {}
 
-    public static DepotResponse toResponse(Depot depot) {
+    static DepotResponse toResponse(Depot depot) {
         return new DepotResponse(
                 depot.getId(),
                 depot.getCode(),

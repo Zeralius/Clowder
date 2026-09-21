@@ -3,11 +3,11 @@ package dev.zeralius.clowder.fleet.domain;
 import dev.zeralius.clowder.fleet.api.DepotSummary;
 import dev.zeralius.clowder.fleet.api.VehicleResponse;
 
-public class VehicleMapper {
+final class VehicleMapper {
 
     private VehicleMapper() {}
 
-    public static VehicleResponse toResponse(Vehicle vehicle) {
+    static VehicleResponse toResponse(Vehicle vehicle) {
         var depot = vehicle.getDepot();
         return new VehicleResponse(
                 vehicle.getId(),
