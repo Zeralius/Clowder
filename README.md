@@ -38,3 +38,13 @@ benchmark comparability.
 
 The format carries no date, so imports default to `2026-01-05` with the depot in UTC, and travel
 time equals distance (speed is nominal and unused).
+
+## Distance and time units
+
+Distances are integers in a provider-defined minor unit — millionths of a plane unit for Solomon
+instances, whole metres for real geography — so route totals accumulate exactly rather than in
+floating point.
+
+Travel times are rounded to whole minutes. Published Solomon results use real-valued times, so the
+gap column compares our integer-time solutions against real-time best-knowns. The rounding makes
+time windows marginally harder to satisfy, so it cannot flatter our results.

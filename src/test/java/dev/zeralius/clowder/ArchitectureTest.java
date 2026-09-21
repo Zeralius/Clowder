@@ -52,4 +52,22 @@ public class ArchitectureTest {
                     .should().dependOnClassesThat()
                     .resideInAPackage("..fleet.domain..")
                     .because("modules talk through facades and ids, never entities");
+
+    /**
+     * Named packages, not {@code ..planning..}: M4 puts persistence and controllers under
+     * {@code planning.plan}, and those are legitimately Spring beans. If this ever fails for a package
+     * in the list, the fix is to move whatever needed the framework out into {@code planning.plan},
+     * never to relax the rule.
+     */
+    @ArchTest
+    static final ArchRule planningCoreIsFrameworkFree =
+            noClasses().that().resideInAnyPackage(
+                            "..planning.model..",
+                            "..planning.feasibility..",
+                            "..planning.solver..",
+                            "..planning.bench..",
+                            "..planning.render..")
+                    .should().dependOnClassesThat()
+                    .resideInAnyPackage("org.springframework..", "jakarta.persistence..", "jakarta.validation..")
+                    .because("the planning core is plain Java: no container, no ORM, testable without infrastructure");
 }
