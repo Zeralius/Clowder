@@ -1,15 +1,24 @@
 package dev.zeralius.clowder.fleet.domain;
 
+import dev.zeralius.clowder.common.error.ConflictException;
+import dev.zeralius.clowder.common.error.NotFoundException;
+import dev.zeralius.clowder.common.web.PageResponse;
 import dev.zeralius.clowder.fleet.FleetFacade;
+import dev.zeralius.clowder.fleet.api.CreateDepotRequest;
 import dev.zeralius.clowder.fleet.api.DepotResponse;
 import dev.zeralius.clowder.fleet.api.DriverResponse;
 import dev.zeralius.clowder.fleet.api.VehicleResponse;
 import dev.zeralius.clowder.fleet.persistence.DepotRepository;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.stereotype.Service;
-
 import java.util.List;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Implements the cross-module facade and owns depot CRUD. Depot creation is deliberately not on the
+ * facade: the facade is about what leaves the module, not a rule that everything must pass through
+ * it, and no other module should be creating depots.
+ */
 @Service
 @Transactional(readOnly = true)
 public class FleetService implements FleetFacade {
@@ -37,5 +46,33 @@ public class FleetService implements FleetFacade {
     @Override
     public List<DriverResponse> findActiveDriversAt(Long depotId) {
         return drivers.findActiveDriversAt(depotId);
+    }
+
+    public PageResponse<DepotResponse> findAllDepots(Pageable pageable) {
+        return PageResponse.from(depots.findAll(pageable), DepotMapper::toResponse);
+    }
+
+    public DepotResponse findDepotById(Long id) {
+        return depots.findById(id)
+                .map(DepotMapper::toResponse)
+                .orElseThrow(() -> new NotFoundException("Depot", id));
+    }
+
+    @Transactional
+    public DepotResponse createDepot(CreateDepotRequest request) {
+        if (depots.findByCode(request.code()).isPresent()) {
+            throw new ConflictException("A depot with code '%s' already exists".formatted(request.code()));
+        }
+        var depot = new Depot(
+                request.code(), request.name(), request.latitude(), request.longitude(), request.timezone());
+        return DepotMapper.toResponse(depots.save(depot));
+    }
+
+    /** Used by the importer: idempotent, so re-importing an instance does not fail. */
+    @Transactional
+    public DepotResponse findOrCreateDepot(CreateDepotRequest request) {
+        return depots.findByCode(request.code())
+                .map(DepotMapper::toResponse)
+                .orElseGet(() -> createDepot(request));
     }
 }
