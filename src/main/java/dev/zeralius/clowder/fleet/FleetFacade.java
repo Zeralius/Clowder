@@ -1,6 +1,7 @@
 package dev.zeralius.clowder.fleet;
 
 import dev.zeralius.clowder.fleet.api.DepotResponse;
+import dev.zeralius.clowder.fleet.api.DriverResponse;
 import dev.zeralius.clowder.fleet.api.VehicleResponse;
 import java.util.List;
 
@@ -13,4 +14,6 @@ public interface FleetFacade {
     List<DepotResponse> findAllDepots();
 
     List<VehicleResponse> findActiveVehiclesAt(Long depotId);
+
+    List<DriverResponse> findActiveDriversAt(Long depotId);
 }
