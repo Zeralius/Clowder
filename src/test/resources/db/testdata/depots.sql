@@ -1,5 +1,8 @@
 -- Idempotent: @Sql re-runs this before every test method, and tests that cannot roll back
 -- would otherwise trip the unique constraint on depot.code.
+-- Children first: consignment, driver and vehicle all reference depot.
+delete from consignment;
+delete from driver;
 delete from vehicle;
 delete from depot;
 
