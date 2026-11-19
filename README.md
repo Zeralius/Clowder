@@ -112,22 +112,27 @@ reproduced. See [`benchmarks/README.md`](benchmarks/README.md) for where they ca
 rebuild the table, and [`benchmarks/results.csv`](benchmarks/results.csv) for the per-instance
 results.
 
-All 56 instances, with a 5 second budget each:
+All 56 instances, with a 5 second budget each. VRPTW papers report cumulative vehicles and
+cumulative distance across the whole set, compared in that order, so this does the same:
+
+| | mine | best-known | over by |
+| --- | --- | --- | --- |
+| Cumulative vehicles | 445 | 405 | +9.9% |
+| Cumulative distance | 63518 | 57187 | +11.1% |
+| Consignments left unrouted | 0 | 0 | |
 
 | | |
 | --- | --- |
-| Mean distance gap | +11.7% over best-known (median +10.9%) |
-| Matched best-known distance exactly | **8** instances |
-| Matched best-known vehicle count | **27** of 56 |
-| Vehicles over best-known | **40** across 56 instances |
-| Consignments left unrouted | **0** |
+| Matched best-known vehicle count | 27 of 56 instances |
+| Matched best-known distance exactly | 8 instances |
+| Mean per-instance distance gap | +11.7% (median +10.9%) |
 | Solve time | 2 to 42 ms per instance |
 
 Broken down by family, where series 1 has tight time windows and series 2 has a long horizon:
 
 | Family | C1 | C2 | R1 | R2 | RC1 | RC2 |
 | --- | --- | --- | --- | --- | --- | --- |
-| Mean gap | +5.9% | +14.3% | +8.2% | +18.0% | +7.9% | +15.9% |
+| Mean distance gap | +5.9% | +14.3% | +8.2% | +18.0% | +7.9% | +15.9% |
 
 What those numbers actually say:
 
@@ -136,24 +141,32 @@ What those numbers actually say:
   rules and the feasibility checks agree with the literature instead of just looking about right.
   C101 and a few others print a gap of `-0.00%`, which is floating point noise on an exact match and
   not an improvement on the best known.
-- **Vehicle count used to be the weak spot and is now the thing that improved most.** It started at
-  58 vehicles over best-known. Adding a route elimination operator, which empties a whole route by
-  reinserting all of its stops elsewhere in one all-or-nothing move, brought that down to 40 and
-  took the number of instances matching the best-known vehicle count from 17 to 27. Measured per
-  instance, 18 got better, 0 got worse and 38 were untouched.
-- **That is why the distance gap went up**, from 9.9% to 11.7%. Retiring a vehicle usually means
-  driving further, and the operator accepts that trade on purpose because vehicle count is the first
-  term of the objective. There was no instance where the distance got worse without a vehicle being
-  saved, so none of that increase is waste.
-- **40 vehicles over best-known is still the biggest gap left.** Elimination only tries to empty one
-  route at a time into the others as they stand. It cannot rearrange two routes to make room for a
-  third, which is what an ejection chain would do.
+- **Both numbers are about 10% over.** That is a normal place for an I1 construction with a basic
+  local search on top. Published state of the art is at 0% by definition, and closing that needs the
+  kind of search this does not do yet.
 - **Series 2 is about twice as bad as series 1.** A long horizon means long routes, and
   first-improvement 2-opt and Or-opt only get through part of a large neighbourhood before they
   converge.
 - **It converges in milliseconds and then sits idle** for the rest of the 5 second budget. That
   unused time is where the remaining headroom is. Perturbation or restarts would spend it, but
   measure first.
+
+### Where the vehicle count came from
+
+Cumulative vehicles started at 463. A route elimination operator, which empties a whole route by
+reinserting all of its stops elsewhere in one all-or-nothing move, brought it to 445 and took the
+number of instances matching the best-known vehicle count from 17 to 27. Per instance that was 18
+better, 0 worse, 38 untouched.
+
+Cumulative distance went up by 1.3% in the same change, and all of it landed on those 18 instances.
+The other 38 came out byte for byte identical. That trade is deliberate, because vehicle count is
+the first term of the objective, and in practice a vehicle costs a driver's day while the extra
+distance costs fuel. No instance got longer without also saving a vehicle.
+
+It is still an expensive trade though, and that is the honest read on it: elimination finds the
+cheapest feasible slot for each stop it rehouses, but the 2-opt and Or-opt passes afterwards do not
+tidy the receiving routes up much before the search converges. Fixing that, and adding an ejection
+chain so two routes can be rearranged to make room for a third, is what would bring 445 nearer 405.
 
 ## Decisions worth knowing about
 
