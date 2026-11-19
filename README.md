@@ -29,7 +29,7 @@ Then import a benchmark instance and plan it:
 # 1. Load 100 customers, 25 vehicles and a depot from a Solomon instance file
 curl -X POST localhost:8080/api/import/solomon \
   -H 'Content-Type: text/plain' \
-  --data-binary @benchmarks/solomon-100/In/rc101.txt
+  --data-binary @benchmarks/solomon-100/In/RC101.txt
 
 # 2. Plan that depot-day. Use the depotId the import returned.
 curl -X POST localhost:8080/api/plan-runs \
@@ -94,7 +94,7 @@ back, so an infeasible plan cannot ship.
 ## Building and testing
 
 ```bash
-./mvnw test     # 111 unit tests, no Docker needed
+./mvnw test     # 123 unit tests, no Docker needed
 ./mvnw verify   # the above plus 44 integration tests on Testcontainers; needs Docker
 ```
 
@@ -198,5 +198,5 @@ Not done yet, in rough order of how much they would matter:
 
 ## Credits
 
-Benchmark instances are M. M. Solomon's VRPTW problem set; best-known values are cited in
-`benchmarks/best-known.csv`.
+Benchmark instances are M. M. Solomon's VRPTW problem set. Their provenance and the source of the
+best-known reference values are recorded in [`benchmarks/README.md`](benchmarks/README.md).

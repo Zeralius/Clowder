@@ -10,8 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Fixtures for the solver tests. The guide refers to {@code TestInstances.line()} without defining it;
- * this is that class.
+ * Fixtures for the solver tests.
  */
 final class TestInstances {
 

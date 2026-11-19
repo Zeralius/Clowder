@@ -20,9 +20,8 @@ import org.junit.jupiter.api.Test;
  * <p>Delaying a stop is simulated by moving its window open time forward, which forces the service
  * start and pushes the whole tail. The delayed stop's own window end is left alone, so a delay past
  * it fails on the stop itself — that is the {@code own} half of the recurrence, and it has to be
- * tested too. An earlier draft of this test widened the window end as well, which disabled that half
- * and made the "slack + 1 must break" assertion false wherever the stop's own window was the binding
- * term.
+ * tested too. Widening the window end instead would disable that half and make the "slack + 1 must
+ * break" assertion false wherever the stop's own window is the binding term.
  */
 class ForwardTimeSlackTest {
 
