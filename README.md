@@ -103,9 +103,27 @@ under Failsafe and may.
 
 ## Benchmarks
 
-Instance files live in `benchmarks/`; they are not redistributed here, so fetch the Solomon
-100-customer set yourself. Results and the gap against published best-known values are in
+The solver is scored against the published best-known solutions for M. M. Solomon's VRPTW benchmark
+set — 56 instances of 100 customers each, the standard yardstick for this problem since 1987.
+
+Instance files are not redistributed here; see [`benchmarks/README.md`](benchmarks/README.md) for
+where to get them and how to rebuild the table. Full results are in
 [`benchmarks/results.csv`](benchmarks/results.csv).
+
+**Current standing** — 21 of the 56 instances, 5 s budget each:
+
+| | |
+| --- | --- |
+| Mean distance gap | **+11.8%** over best-known |
+| Vehicles over best-known | 28 across 21 instances |
+| Consignments left unrouted | 0 |
+| Solve time | 4–78 ms per instance |
+
+Read honestly: every route is feasible and nothing is dropped, but the solver uses more vehicles
+than best-known on almost every instance — and vehicle count is the *first* term of the objective,
+so that costs more than the distance gap does. It also converges in milliseconds and then sits idle
+for the rest of its budget, which is exactly where the headroom is: perturbation and restarts would
+spend that time. Those are the next things to measure, in that order.
 
 ## Decisions worth knowing
 
