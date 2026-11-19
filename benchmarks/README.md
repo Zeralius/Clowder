@@ -2,9 +2,20 @@
 
 ## Instance files
 
-Not redistributed here. Fetch M. M. Solomon's VRPTW benchmark set yourself and put the plain-text
-instance files under `solomon-100/`; any `.txt` file in that tree whose first line is the instance
-name is picked up. The expected shape is the published one:
+`solomon-100/` holds all 56 of M. M. Solomon's 100-customer VRPTW instances, committed so the
+results below are reproducible: C101–C109, C201–C208, R101–R112, R201–R211, RC101–RC108,
+RC201–RC208.
+
+**Provenance.** Solomon's own site (`web.cba.neu.edu/~msolomon/problems.htm`) was unreachable and
+SINTEF's `solomon-100.zip` turned out to be incomplete, so these came from the copy in
+<https://github.com/irb-lab/py-ga-vrptw> under `data/text/`. They were checked against the canonical
+values before use — R101 has 25 vehicles of capacity 200, a depot at (35, 35) with horizon 230, and
+customer 1 reading `41 49 10 161 171 10` — and every one of the 56 parses and solves to a distance
+within a sane margin of its published best-known, eight of them exactly. These are Solomon's
+research data, not this project's.
+
+Any `.txt` file anywhere under `solomon-100/` is picked up, and the instance's real name comes from
+the first line of the file rather than the filename. The expected shape is the published one:
 
 ```text
 RC101
@@ -23,9 +34,6 @@ CUST NO.   XCOORD.   YCOORD.   DEMAND   READY TIME   DUE DATE   SERVICE TIME
 The parser locates the `NUMBER` and `CUST NO.` marker lines and splits on runs of whitespace, so
 spacing and line endings do not matter. Customer 0 is the depot; its due date is the planning
 horizon.
-
-The complete 100-customer set is 56 instances: C101–C109, C201–C208, R101–R112, R201–R211,
-RC101–RC108, RC201–RC208.
 
 ## `best-known.csv`
 

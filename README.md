@@ -104,26 +104,42 @@ under Failsafe and may.
 ## Benchmarks
 
 The solver is scored against the published best-known solutions for M. M. Solomon's VRPTW benchmark
-set — 56 instances of 100 customers each, the standard yardstick for this problem since 1987.
+set — 56 instances of 100 customers each, the standard yardstick for this problem since 1987. The
+instance files are committed under `benchmarks/` so the numbers below are reproducible; see
+[`benchmarks/README.md`](benchmarks/README.md) for provenance and how to rebuild the table. Full
+per-instance results are in [`benchmarks/results.csv`](benchmarks/results.csv).
 
-Instance files are not redistributed here; see [`benchmarks/README.md`](benchmarks/README.md) for
-where to get them and how to rebuild the table. Full results are in
-[`benchmarks/results.csv`](benchmarks/results.csv).
-
-**Current standing** — 21 of the 56 instances, 5 s budget each:
+**All 56 instances, 5 s budget each:**
 
 | | |
 | --- | --- |
-| Mean distance gap | **+11.8%** over best-known |
-| Vehicles over best-known | 28 across 21 instances |
-| Consignments left unrouted | 0 |
-| Solve time | 4–78 ms per instance |
+| Mean distance gap | **+9.9%** over best-known (median +9.2%) |
+| Matched best-known distance exactly | **8** instances |
+| Matched best-known vehicle count | 17 of 56 |
+| Vehicles over best-known | 58 across 56 instances |
+| Consignments left unrouted | **0** |
+| Solve time | 2–34 ms per instance |
 
-Read honestly: every route is feasible and nothing is dropped, but the solver uses more vehicles
-than best-known on almost every instance — and vehicle count is the *first* term of the objective,
-so that costs more than the distance gap does. It also converges in milliseconds and then sits idle
-for the rest of its budget, which is exactly where the headroom is: perturbation and restarts would
-spend that time. Those are the next things to measure, in that order.
+By family, where series 1 has tight windows and series 2 a long horizon:
+
+| Family | C1 | C2 | R1 | R2 | RC1 | RC2 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Mean gap | +5.5% | +9.2% | +7.8% | +14.3% | +7.6% | +15.0% |
+
+Read honestly:
+
+- **Hitting best-known exactly on eight clustered instances** is the result worth trusting. It is
+  hard to land on a published optimum by accident, so it says the distance arithmetic, the window
+  semantics and the feasibility rules all agree with the literature rather than merely looking
+  plausible. (`C101` and friends show a gap of `-0.00%`: that is floating-point noise on an exact
+  match, not an improvement on the best known.)
+- **Vehicle count is the weak spot.** Roughly one extra vehicle per instance, and vehicle count is
+  the *first* term of the objective, so it costs more than the distance gap does. Relocate is not
+  emptying routes hard enough.
+- **Series 2 is twice as bad as series 1.** Long horizons mean long routes, and first-improvement
+  2-opt and Or-opt only partially explore a large neighbourhood before converging.
+- **It converges in milliseconds and then idles** for the remaining 5 seconds. That unspent budget
+  is the headroom: perturbation and restarts would use it. Measure before adding, in that order.
 
 ## Decisions worth knowing
 
