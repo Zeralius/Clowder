@@ -21,7 +21,7 @@ import java.util.List;
 public final class HeuristicSolver implements Solver {
 
     /** Bump on any change that can alter output. Stored on {@code plan_run} in M4. */
-    public static final String VERSION = "i1+elim+relocate+2opt+oropt/2";
+    public static final String VERSION = "i1+elim+relocate+2opt+oropt+ils/3";
 
     private final RouteEvaluator evaluator = new RouteEvaluator();
 

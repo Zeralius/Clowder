@@ -117,56 +117,69 @@ cumulative distance across the whole set, compared in that order, so this does t
 
 | | mine | best-known | over by |
 | --- | --- | --- | --- |
-| Cumulative vehicles | 445 | 405 | +9.9% |
-| Cumulative distance | 63518 | 57187 | +11.1% |
+| Cumulative vehicles | 444 | 405 | +9.6% |
+| Cumulative distance | 62650 | 57187 | +9.6% |
 | Consignments left unrouted | 0 | 0 | |
 
 | | |
 | --- | --- |
-| Matched best-known vehicle count | 27 of 56 instances |
-| Matched best-known distance exactly | 8 instances |
-| Mean per-instance distance gap | +11.7% (median +10.9%) |
-| Solve time | 2 to 42 ms per instance |
+| Matched best-known vehicle count | 28 of 56 instances |
+| Matched best-known distance exactly | 9 instances |
+| Mean per-instance distance gap | +10.1% (median +9.0%) |
+| Solve time | 2 to 340 ms per instance, median 16 ms |
 
 Broken down by family, where series 1 has tight time windows and series 2 has a long horizon:
 
 | Family | C1 | C2 | R1 | R2 | RC1 | RC2 |
 | --- | --- | --- | --- | --- | --- | --- |
-| Mean distance gap | +5.9% | +14.3% | +8.2% | +18.0% | +7.9% | +15.9% |
+| Mean distance gap | +3.7% | +13.7% | +8.2% | +14.2% | +7.9% | +12.8% |
 
 What those numbers actually say:
 
-- **Eight instances match the best-known distance exactly.** This is the result I trust most. You do
+- **Nine instances match the best-known distance exactly.** This is the result I trust most. You do
   not land on a published optimum by accident, so it means the distance arithmetic, the time window
   rules and the feasibility checks agree with the literature instead of just looking about right.
   C101 and a few others print a gap of `-0.00%`, which is floating point noise on an exact match and
   not an improvement on the best known.
-- **Both numbers are about 10% over.** That is a normal place for an I1 construction with a basic
-  local search on top. Published state of the art is at 0% by definition, and closing that needs the
-  kind of search this does not do yet.
-- **Series 2 is about twice as bad as series 1.** A long horizon means long routes, and
-  first-improvement 2-opt and Or-opt only get through part of a large neighbourhood before they
-  converge.
-- **It converges in milliseconds and then sits idle** for the rest of the 5 second budget. That
-  unused time is where the remaining headroom is. Perturbation or restarts would spend it, but
-  measure first.
+- **Both numbers are about 10% over.** That is a normal place for an I1 construction with local
+  search on top. Published state of the art sits at 0% by definition, and closing that gap needs
+  search this does not do.
+- **Series 2 is still worse than series 1.** A long horizon means long routes, and the
+  first-improvement operators only get through part of a large neighbourhood before they converge.
 
-### Where the vehicle count came from
+### How the vehicle count got from 463 to 444
 
-Cumulative vehicles started at 463. A route elimination operator, which empties a whole route by
-reinserting all of its stops elsewhere in one all-or-nothing move, brought it to 445 and took the
-number of instances matching the best-known vehicle count from 17 to 27. Per instance that was 18
-better, 0 worse, 38 untouched.
+The first version used 463 vehicles. Two changes brought that down, and measuring before each one
+mattered, because the obvious guess was wrong both times.
 
-Cumulative distance went up by 1.3% in the same change, and all of it landed on those 18 instances.
-The other 38 came out byte for byte identical. That trade is deliberate, because vehicle count is
-the first term of the objective, and in practice a vehicle costs a driver's day while the extra
-distance costs fuel. No instance got longer without also saving a vehicle.
+**Route elimination.** Relocate moves one stop at a time and accepts a move only if it shortens the
+total or empties the source outright. Emptying a route of three stops needs three accepted moves,
+and the first two empty nothing, so they get judged on distance alone and rejected. The route
+survives and the vehicle stays out. A route elimination operator empties a whole route in one
+all-or-nothing move instead: find a feasible home for every stop or change nothing. That took
+vehicles to 445, at the cost of 1.3% more distance.
 
-It is still an expensive trade though, and that is the honest read on it: elimination finds the
-cheapest feasible slot for each stop it rehouses, but the 2-opt and Or-opt passes afterwards do not
-tidy the receiving routes up much before the search converges. Fixing that, and adding an ejection
-chain so two routes can be rearranged to make room for a third, is what would bring 445 nearer 405.
+**Then the interesting measurement.** The obvious next step looked like an ejection chain, so that a
+stop with nowhere to go could displace another one. Measuring first said no: after the search
+converges, a typical route cannot rehouse four to nine of its stops, and only 4% of routes are
+blocked by just one or two. The receiving routes were simply full. But full of what turned out to
+matter: routes were running at 86% of their shift and only 65% of their weight capacity. Time was
+binding, not load. A route that wastes shift time on a poor ordering cannot absorb anyone else's
+stops, so vehicle count and distance were not really in tension. Better routes would give both.
+
+**Iterated local search.** The search was converging in about 20 ms and leaving almost all of a 5
+second budget unused, so there was somewhere obvious to spend it. After reaching a local optimum it
+now pulls out 15% of the stops at random, reinserts them at their cheapest feasible positions, runs
+the operators again, and keeps the result only if it beats the best seen. The randomness is seeded
+from the config, so runs stay reproducible. That took vehicles to 444 and gave back all the distance
+elimination had cost: against the first version, cumulative distance is now slightly lower rather
+than higher, and across the 56 instances 28 came out better and none worse.
+
+**What is left.** Raising the patience setting from 50 to 2000 so that the full budget gets used
+changes nothing: still 444 vehicles, and 0.1% less distance for up to 5 seconds per instance. So the
+limit now is the shape of the moves rather than the time available. Getting 444 nearer 405 needs a
+neighbourhood that can rearrange several routes at once, which is what an ejection chain does, and
+it needs it to work against time slack rather than spare capacity.
 
 ## Decisions worth knowing about
 

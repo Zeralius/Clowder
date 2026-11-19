@@ -127,23 +127,26 @@ class RouteEliminationOperatorTest {
         assertThat(state.toSolution().vehicleCount()).isEqualTo(1);
     }
 
-    /** End to end: the full operator set retires a vehicle the old set left on the road. */
+    /**
+     * End to end through the optimiser.
+     *
+     * <p>This deliberately does not compare against an operator list without elimination any more.
+     * The optimiser now perturbs and retries, and a kick can shuffle the routes into a shape where
+     * plain relocate finishes the job, so that comparison stopped being a control. What elimination
+     * uniquely does is proved at operator level in {@link #succeedsWhereSingleStopRelocateIsStuck()}.
+     */
     @Test
-    void theOptimiserRetiresAVehicleTheOldOperatorSetCouldNot() {
+    void theOptimiserRetiresTheVehicle() {
         var instance = nonMetric(2);
         var start = solution(instance, new int[] {0, 1}, new int[] {2, 3});
 
-        var without = new LocalSearchOptimiser(
-                        instance,
-                        SolverConfig.defaults(),
-                        List.of(new RelocateOperator(), new TwoOptOperator(), new OrOptOperator()))
-                .optimise(start, Deadline.startingNow(Duration.ofSeconds(5)));
-        var with = new LocalSearchOptimiser(instance, SolverConfig.defaults())
+        var outcome = new LocalSearchOptimiser(instance, SolverConfig.defaults())
                 .optimise(start, Deadline.startingNow(Duration.ofSeconds(5)));
 
-        assertThat(without.solution().vehicleCount()).isEqualTo(2);
-        assertThat(with.solution().vehicleCount()).isEqualTo(1);
-        assertThat(with.solution().isComplete()).isTrue();
+        assertThat(outcome.solution().vehicleCount()).isEqualTo(1);
+        assertThat(outcome.solution().isComplete()).isTrue();
+        assertThat(allStops(SolutionState.of(outcome.solution(), instance)))
+                .containsExactlyInAnyOrder(0, 1, 2, 3);
     }
 
     // ---- structure ----
