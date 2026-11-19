@@ -70,7 +70,7 @@ importer      Solomon instance files           | facade, by id, never by entity
 planning
   model       flat problem: specs + matrix       no Spring, no JPA, no transaction
   feasibility RouteEvaluator: every violation    enforced by an ArchUnit rule
-  solver      I1 construction + local search
+  solver      I1 construction, then local search
   render      SVG
   plan        the edge: entities to solver, and the HTTP resource
 ```
@@ -116,18 +116,18 @@ All 56 instances, with a 5 second budget each:
 
 | | |
 | --- | --- |
-| Mean distance gap | **+9.9%** over best-known (median +9.2%) |
+| Mean distance gap | +11.7% over best-known (median +10.9%) |
 | Matched best-known distance exactly | **8** instances |
-| Matched best-known vehicle count | 17 of 56 |
-| Vehicles over best-known | 58 across 56 instances |
+| Matched best-known vehicle count | **27** of 56 |
+| Vehicles over best-known | **40** across 56 instances |
 | Consignments left unrouted | **0** |
-| Solve time | 2 to 34 ms per instance |
+| Solve time | 2 to 42 ms per instance |
 
 Broken down by family, where series 1 has tight time windows and series 2 has a long horizon:
 
 | Family | C1 | C2 | R1 | R2 | RC1 | RC2 |
 | --- | --- | --- | --- | --- | --- | --- |
-| Mean gap | +5.5% | +9.2% | +7.8% | +14.3% | +7.6% | +15.0% |
+| Mean gap | +5.9% | +14.3% | +8.2% | +18.0% | +7.9% | +15.9% |
 
 What those numbers actually say:
 
@@ -136,14 +136,24 @@ What those numbers actually say:
   rules and the feasibility checks agree with the literature instead of just looking about right.
   C101 and a few others print a gap of `-0.00%`, which is floating point noise on an exact match and
   not an improvement on the best known.
-- **Vehicle count is the weak spot.** It uses about one extra vehicle per instance. Vehicle count is
-  the first term of the objective, so this costs more than the distance gap does. The relocate
-  operator is not emptying routes aggressively enough.
+- **Vehicle count used to be the weak spot and is now the thing that improved most.** It started at
+  58 vehicles over best-known. Adding a route elimination operator, which empties a whole route by
+  reinserting all of its stops elsewhere in one all-or-nothing move, brought that down to 40 and
+  took the number of instances matching the best-known vehicle count from 17 to 27. Measured per
+  instance, 18 got better, 0 got worse and 38 were untouched.
+- **That is why the distance gap went up**, from 9.9% to 11.7%. Retiring a vehicle usually means
+  driving further, and the operator accepts that trade on purpose because vehicle count is the first
+  term of the objective. There was no instance where the distance got worse without a vehicle being
+  saved, so none of that increase is waste.
+- **40 vehicles over best-known is still the biggest gap left.** Elimination only tries to empty one
+  route at a time into the others as they stand. It cannot rearrange two routes to make room for a
+  third, which is what an ejection chain would do.
 - **Series 2 is about twice as bad as series 1.** A long horizon means long routes, and
   first-improvement 2-opt and Or-opt only get through part of a large neighbourhood before they
   converge.
 - **It converges in milliseconds and then sits idle** for the rest of the 5 second budget. That
-  unused time is where the headroom is. Perturbation or restarts would spend it, but measure first.
+  unused time is where the remaining headroom is. Perturbation or restarts would spend it, but
+  measure first.
 
 ## Decisions worth knowing about
 

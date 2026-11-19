@@ -7,8 +7,9 @@ import java.util.List;
  * Runs operators in a fixed order until nothing improves, the budget expires, or the configured number
  * of non-improving passes is reached.
  *
- * <p>Operator order is part of the contract: relocate first because vehicle count outranks distance,
- * then the intra-route operators to tidy up what relocate left behind.
+ * <p>Operator order is part of the contract, and it follows the objective. Route elimination comes
+ * first because retiring a vehicle beats any distance saving, then relocate, then the intra-route
+ * operators to tidy up what the other two left behind.
  */
 final class LocalSearchOptimiser {
 
@@ -17,7 +18,14 @@ final class LocalSearchOptimiser {
     private final List<LocalSearchOperator> operators;
 
     LocalSearchOptimiser(ProblemInstance instance, SolverConfig config) {
-        this(instance, config, List.of(new RelocateOperator(), new TwoOptOperator(), new OrOptOperator()));
+        this(
+                instance,
+                config,
+                List.of(
+                        new RouteEliminationOperator(),
+                        new RelocateOperator(),
+                        new TwoOptOperator(),
+                        new OrOptOperator()));
     }
 
     LocalSearchOptimiser(ProblemInstance instance, SolverConfig config, List<LocalSearchOperator> operators) {
