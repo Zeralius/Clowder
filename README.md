@@ -2,7 +2,8 @@
 
 Route planning for a small delivery fleet. You keep depots, vehicles, drivers and consignments in
 it, and then ask it to turn one day's deliveries into routes that respect vehicle capacity, customer
-time windows and driver shift lengths.
+time windows and driver shift lengths. You publish those routes as the plan the drivers work from,
+and as they report back it tells you how far the day has drifted from it.
 
 The planner uses Solomon's I1 insertion heuristic to build routes and then local search to improve
 them. I benchmark it against the published Solomon VRPTW instances, so the quality claim is
@@ -70,6 +71,8 @@ sees what the solver proposed before any driver does.
 | `GET` | `/api/plans/{id}` | One plan, with every stop and its planned times |
 | `GET` | `/api/plans?vehicleId=&serviceDate=` | Every version for a vehicle-day, newest first |
 | `POST` | `/api/plans/{id}/publish` | Publish a draft, superseding the version it replaces |
+| `POST` | `/api/plans/{id}/events` | Record what a driver reported. Idempotent: a retry returns the original |
+| `GET` | `/api/plans/{id}/tracking` | Progress, current delay, and the windows the rest of the route can no longer meet |
 
 All errors come back as RFC 9457 problem documents, so you always get `type`, `title`, `status` and
 `detail`, plus a field-level `errors` list when validation fails.
@@ -86,6 +89,7 @@ planning
   solver      I1 construction, then local search
   render      SVG
   plan        the edge: entities to solver, stored plans, and the HTTP resources
+execution     the driver event log, and plan against reality
 ```
 
 Two rules hold most of this up.
@@ -146,11 +150,62 @@ check. The solver has its own faster copy of that arithmetic for its inner loop,
 asserts the two never disagree on randomly generated routes. Every route the solver returns is run
 back through the evaluator before it is handed out, so an infeasible plan cannot escape.
 
+## What actually happened
+
+A plan is a forecast. Drivers report back against it, and they do it from phones with wrong clocks,
+through tunnels, in bursts of six events at once.
+
+```bash
+# The driver left the depot, arrived, and delivered. One key per event, resent on every retry.
+curl -X POST localhost:8080/api/plans/1/events \
+  -H 'Content-Type: application/json' \
+  -d '{"idempotencyKey":"e7c1...","planStopId":4,"type":"DELIVERED","occurredAt":"2026-01-05T09:41:00Z"}'
+
+# How the day is going, and what is no longer reachable
+curl localhost:8080/api/plans/1/tracking
+```
+
+Four decisions carry this.
+
+**Two timestamps, always.** `occurred_at` is the device clock and is used only for ordering;
+`received_at` is the server clock and is what lateness and connectivity are reasoned about. A driver
+who spent an hour in a basement car park uploads six events in one burst, and conflating the two
+numbers makes that look like six things happening at once.
+
+**Out-of-order arrival is accepted, not rejected.** A `DELIVERED` can land before its `ARRIVED`.
+Rejecting means one dropped packet wedges a driver for the rest of the day, and buffering means
+building a reconciliation system nobody asked for. So everything is accepted, sorted by device time,
+and the fold is tolerant of gaps. That tolerance is deliberate rather than accidental: stop status
+moves by precedence, not last-write-wins, so a late `ARRIVED` cannot downgrade a stop that is already
+delivered.
+
+**Replaying an event returns the original answer.** The client generates a key per event and retries
+until something answers, so a retry is a successful call, not a 409 — the client cannot tell "you
+told me already" from "thanks" and should not have to. The lookup is the behaviour and the unique
+constraint is the backstop for two retries landing in the same millisecond.
+
+**State is derived, never stored twice.** Stop status is a projection over the log. If it were also a
+column on `plan_stop` that column would be a cache, and `ProjectionRebuildIT` — which shuffles the
+log and asserts the same answer comes out — is worth more than the column would be. The event log is
+append-only: `DriverEvent` has no setters at all, which a test checks by reflection, so there is no
+`UPDATE` for Hibernate to write.
+
+And the projected misses are the reason M2 was built the way it was. They are not a new algorithm:
+`DivergenceService` rebuilds a one-vehicle problem containing only the stops that are left, starting
+from where the vehicle actually is and when it is actually running, and hands it to `RouteEvaluator`.
+The `TimeWindowMissed` violations that come back *are* the report. The feasibility engine earning its
+keep a second time is the strongest argument for having built it as a pure function with no framework
+attached.
+
+Where the vehicle is comes from the last completed stop, or the depot if nothing is done yet — never
+from GPS. Device coordinates are stored but advisory, because geofenced auto-arrival is how a car
+park turns into a delivery.
+
 ## Building and testing
 
 ```bash
-./mvnw test     # 152 unit tests, no Docker needed
-./mvnw verify   # the above plus 60 integration tests on Testcontainers, needs Docker
+./mvnw test     # 171 unit tests, no Docker needed
+./mvnw verify   # the above plus 90 integration tests on Testcontainers, needs Docker
 ```
 
 The name decides which plugin runs a test. A `*Test` class runs under Surefire and must not touch a
@@ -271,24 +326,29 @@ and travel time equals distance because the vehicle speed is nominal and unused.
 
 ## Status
 
-Working so far: all four entities with full CRUD and consistent error shapes, the Solomon importer,
-the feasibility engine, the solver, the SVG renderer, and plan runs stored as versioned, publishable
-plans with the publish rule enforced by the database.
+The story is complete end to end: reference data in, a benchmark instance imported, a depot-day
+solved, plans published as versioned artifacts with the publish rule enforced by the database,
+driver events ingested idempotently, and plan against reality reported from the event log.
 
 Not done yet, roughly in the order of how much they matter:
 
-- **No execution tracking.** No driver events, no idempotent ingestion, nothing that compares the
-  plan against what actually happened. That is the next milestone, and it reuses the feasibility
-  engine a third time: projected window misses come from running the evaluator over the stops a
-  driver has left, with the time they are actually running at.
-- **Publishing a plan does not move its consignments.** They stay `PENDING`, so replanning a day
-  that already has a published plan works, but the consignment lifecycle is not yet driven by
-  planning. Execution is where that starts to matter.
+- **Publishing a plan does not move its consignments.** They stay `PENDING` rather than becoming
+  `PLANNED` and then `DELIVERED`, so the consignment lifecycle is not yet driven by planning or by
+  execution. Replanning a published day works precisely because of that, and the state machine and
+  its allowed transitions are in place, but nothing drives them. This is the first thing I would do
+  next: a published plan should move its stops to `PLANNED`, and a `DELIVERED` event should move that
+  consignment to `DELIVERED`.
+- **Divergence is read on demand, not pushed.** `GET /api/plans/{id}/tracking` recomputes the
+  projection per call. That is cheap at a depot-day of a few hundred rows and would not be at a
+  thousand vehicles; the fix is a materialised projection, and the rebuild test is what would make
+  that safe to add.
 - **A plan run holds the request thread.** It is shaped for a worker — 202, a `Location` header, a
   run you poll — but the solve still happens inline, so a five second budget is a five second
   request.
-- **The distance model is hard-coded to Euclidean** in the planning loader. Real depots need
-  haversine, and that choice should be made per instance rather than per build.
+- **The distance model is hard-coded to Euclidean** in the planning loader and again in the
+  divergence projection. Real depots need haversine, and that choice should be made per instance
+  rather than per build. The two places agree, which is the only reason this is a limitation and not
+  a bug.
 - **Depot has no update or deactivate**, because the table has no `active` column. Inventing a
   lifecycle before anything needs one would be a migration for its own sake.
 - **`shift_minutes` is capped at 2880**, which rules out Solomon type-2 horizons until a migration

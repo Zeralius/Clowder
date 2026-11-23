@@ -12,4 +12,10 @@ public interface ConsignmentFacade {
      * {@code PENDING}; when M4 replans a published day it will also mean {@code PLANNED}.
      */
     List<ConsignmentResponse> findPlannableFor(Long depotId, LocalDate serviceDate);
+
+    /**
+     * Every consignment at this depot on this date, whatever its status. Execution needs the ones
+     * already on a plan, which {@link #findPlannableFor} deliberately excludes.
+     */
+    List<ConsignmentResponse> findForServiceDate(Long depotId, LocalDate serviceDate);
 }

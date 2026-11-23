@@ -45,6 +45,7 @@ public class PlanRunPersister {
 
         final var drafts = assembler.assemble(
                 runId,
+                run.getDepotId(),
                 result.solution(),
                 loaded.instance(),
                 loaded.epoch(),

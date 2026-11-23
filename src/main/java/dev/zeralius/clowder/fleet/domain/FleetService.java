@@ -52,6 +52,7 @@ public class FleetService implements FleetFacade {
         return PageResponse.from(depots.findAll(pageable), DepotMapper::toResponse);
     }
 
+    @Override
     public DepotResponse findDepotById(Long id) {
         return depots.findById(id)
                 .map(DepotMapper::toResponse)

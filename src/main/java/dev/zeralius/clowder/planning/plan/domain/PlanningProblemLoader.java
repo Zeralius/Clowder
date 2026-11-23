@@ -40,10 +40,7 @@ public class PlanningProblemLoader {
     /** Short and read-only. Everything it returns is detached, immutable data. */
     @Transactional(readOnly = true)
     public LoadedProblem load(Long depotId, LocalDate serviceDate) {
-        final var depot = fleet.findAllDepots().stream()
-                .filter(d -> d.id().equals(depotId))
-                .findFirst()
-                .orElseThrow(() -> new NotFoundException("Depot", depotId));
+        final var depot = fleet.findDepotById(depotId);
 
         final var vehicles = fleet.findActiveVehiclesAt(depotId);
         if (vehicles.isEmpty()) {

@@ -44,6 +44,10 @@ public class Plan {
     @Column(name = "plan_run_id", nullable = false)
     private Long planRunId;
 
+    /** The depot this vehicle works out of. Execution needs it before anything has been completed. */
+    @Column(name = "depot_id", nullable = false)
+    private Long depotId;
+
     @Column(name = "vehicle_id", nullable = false)
     private Long vehicleId;
 
@@ -86,12 +90,14 @@ public class Plan {
 
     public Plan(
             Long planRunId,
+            Long depotId,
             Long vehicleId,
             LocalDate serviceDate,
             int versionNo,
             long totalDistance,
             int totalDurationMinutes) {
         this.planRunId = planRunId;
+        this.depotId = depotId;
         this.vehicleId = vehicleId;
         this.serviceDate = serviceDate;
         this.versionNo = versionNo;
@@ -135,6 +141,10 @@ public class Plan {
 
     public Long getPlanRunId() {
         return planRunId;
+    }
+
+    public Long getDepotId() {
+        return depotId;
     }
 
     public Long getVehicleId() {

@@ -17,7 +17,7 @@ class PlanImmutabilityTest {
     private static final LocalDate DAY = LocalDate.of(2026, 1, 5);
 
     private static Plan draft() {
-        return new Plan(1L, 7L, DAY, 1, 1_000L, 60);
+        return new Plan(1L, 5L, 7L, DAY, 1, 1_000L, 60);
     }
 
     private static PlanStop stop() {

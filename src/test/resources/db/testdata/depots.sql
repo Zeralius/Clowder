@@ -1,6 +1,7 @@
 -- Idempotent: @Sql re-runs this before every test method, and tests that cannot roll back
 -- would otherwise trip the unique constraint on depot.code.
 -- Children first: plans reference vehicle and consignment, which reference depot.
+delete from driver_event;
 delete from plan_stop;
 delete from plan;
 delete from plan_run_unassigned;

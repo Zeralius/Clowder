@@ -35,6 +35,7 @@ public final class PlanAssembler {
      */
     public List<Plan> assemble(
             Long planRunId,
+            Long depotId,
             Solution solution,
             ProblemInstance instance,
             Instant epoch,
@@ -48,7 +49,8 @@ public final class PlanAssembler {
             if (route.isEmpty()) {
                 continue;
             }
-            plans.add(assembleOne(planRunId, route, instance, epoch, serviceDate, consignments, nextVersionFor));
+            plans.add(assembleOne(
+                    planRunId, depotId, route, instance, epoch, serviceDate, consignments, nextVersionFor));
         }
 
         return plans;
@@ -56,6 +58,7 @@ public final class PlanAssembler {
 
     private Plan assembleOne(
             Long planRunId,
+            Long depotId,
             Route route,
             ProblemInstance instance,
             Instant epoch,
@@ -68,6 +71,7 @@ public final class PlanAssembler {
 
         final var plan = new Plan(
                 planRunId,
+                depotId,
                 route.vehicleId(),
                 serviceDate,
                 nextVersionFor.applyAsInt(route.vehicleId()),

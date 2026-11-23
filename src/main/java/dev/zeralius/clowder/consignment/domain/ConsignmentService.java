@@ -43,6 +43,13 @@ public class ConsignmentService implements ConsignmentFacade {
     }
 
     @Override
+    public List<ConsignmentResponse> findForServiceDate(Long depotId, LocalDate serviceDate) {
+        return consignments.findByDepotIdAndServiceDate(depotId, serviceDate).stream()
+                .map(ConsignmentMapper::toResponse)
+                .toList();
+    }
+
+    @Override
     public List<ConsignmentResponse> findPlannableFor(Long depotId, LocalDate serviceDate) {
         return consignments
                 .findByDepotIdAndServiceDateAndStatus(depotId, serviceDate, ConsignmentStatus.PENDING)

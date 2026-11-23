@@ -6,10 +6,12 @@ import java.time.Instant;
  * One visit, as it was planned. Every field is a snapshot taken when the plan was assembled, so this
  * is what the dispatcher was told rather than what the consignment says today.
  *
+ * @param id the stop id, which is what a driver event names when it reports against this visit
  * @param waitMinutes time spent waiting for the window to open — normal, never a violation
  * @param loadAfter what remains on the vehicle once this stop has been served
  */
 public record PlanStopResponse(
+        Long id,
         int sequenceNo,
         Long consignmentId,
         String reference,

@@ -14,6 +14,7 @@ import java.util.List;
 public record PlanResponse(
         Long id,
         Long planRunId,
+        Long depotId,
         Long vehicleId,
         LocalDate serviceDate,
         int versionNo,

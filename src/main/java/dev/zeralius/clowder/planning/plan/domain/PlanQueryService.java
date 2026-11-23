@@ -34,6 +34,8 @@ public class PlanQueryService implements PlanningFacade {
         return toResponse(run);
     }
 
+    /** Execution reads a plan by id through this, so it never touches a planning entity. */
+    @Override
     @Transactional(readOnly = true)
     public PlanResponse findPlan(Long id) {
         final var plan = plans.findWithStopsById(id).orElseThrow(() -> new NotFoundException("Plan", id));
@@ -64,6 +66,7 @@ public class PlanQueryService implements PlanningFacade {
         return new PlanResponse(
                 plan.getId(),
                 plan.getPlanRunId(),
+                plan.getDepotId(),
                 plan.getVehicleId(),
                 plan.getServiceDate(),
                 plan.getVersionNo(),
@@ -99,6 +102,7 @@ public class PlanQueryService implements PlanningFacade {
 
     private static PlanStopResponse toResponse(PlanStop stop) {
         return new PlanStopResponse(
+                stop.getId(),
                 stop.getSequenceNo(),
                 stop.getConsignmentId(),
                 stop.getReference(),

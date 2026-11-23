@@ -54,6 +54,18 @@ public class ArchitectureTest {
                     .because("modules talk through facades and ids, never entities");
 
     /**
+     * Execution gets plans as DTOs through {@code PlanningFacade}. The rule is what makes that a
+     * boundary rather than a preference: fold an event log over a planning entity once and the two
+     * modules are welded together, and the projector stops being testable without a database.
+     */
+    @ArchTest
+    static final ArchRule executionReadsPlanningThroughItsFacade =
+            noClasses().that().resideInAPackage("..execution..")
+                    .should().dependOnClassesThat()
+                    .resideInAnyPackage("..planning.plan.domain..", "..planning.plan.persistence..")
+                    .because("execution reads plans through the facade, as DTOs, never as entities");
+
+    /**
      * Named packages, not {@code ..planning..}: M4 puts persistence and controllers under
      * {@code planning.plan}, and those are legitimately Spring beans. If this ever fails for a package
      * in the list, the fix is to move whatever needed the framework out into {@code planning.plan},

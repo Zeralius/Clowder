@@ -72,7 +72,7 @@ class PlanPublishConcurrencyIT {
 
         draftIds = new ArrayList<>(THREADS);
         for (var version = 1; version <= THREADS; version++) {
-            draftIds.add(plans.save(new Plan(run.getId(), vehicleId, DAY, version, 1_000L, 60))
+            draftIds.add(plans.save(new Plan(run.getId(), depotId, vehicleId, DAY, version, 1_000L, 60))
                     .getId());
         }
     }

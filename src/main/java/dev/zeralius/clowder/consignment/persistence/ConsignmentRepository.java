@@ -17,6 +17,9 @@ public interface ConsignmentRepository extends JpaRepository<Consignment, Long> 
     /** Spring Data binds by position, in the order the properties appear in the name. */
     Page<Consignment> findByDepotIdAndServiceDate(Long depotId, LocalDate serviceDate, Pageable pageable);
 
+    /** The whole depot-day, whatever the status. M5 tracks stops that are no longer PENDING. */
+    List<Consignment> findByDepotIdAndServiceDate(Long depotId, LocalDate serviceDate);
+
     /** Covered exactly by {@code idx_consignment_planning}. This is M3's hot query. */
     List<Consignment> findByDepotIdAndServiceDateAndStatus(
             Long depotId, LocalDate serviceDate, ConsignmentStatus status);

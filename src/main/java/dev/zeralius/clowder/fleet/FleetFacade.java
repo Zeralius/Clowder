@@ -13,6 +13,9 @@ public interface FleetFacade {
 
     List<DepotResponse> findAllDepots();
 
+    /** One depot by id, with its coordinates. Planning and execution both need the depot location. */
+    DepotResponse findDepotById(Long id);
+
     List<VehicleResponse> findActiveVehiclesAt(Long depotId);
 
     List<DriverResponse> findActiveDriversAt(Long depotId);

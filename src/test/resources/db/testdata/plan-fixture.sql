@@ -5,6 +5,7 @@
 --
 -- Children first, all the way down: plan_stop and plan_run_unassigned cascade from their parents,
 -- but naming them keeps the order obvious to the next person to add a table.
+delete from driver_event;
 delete from plan_stop;
 delete from plan;
 delete from plan_run_unassigned;

@@ -27,6 +27,8 @@ class PlanAssemblerTest {
 
     private static final LocalDate DAY = LocalDate.of(2026, 1, 5);
 
+    private static final Long DEPOT_ID = 1L;
+
     /** The service date at midnight UTC, as the loader builds it for a UTC depot. */
     private static final Instant EPOCH = Instant.parse("2026-01-05T00:00:00Z");
 
@@ -62,7 +64,7 @@ class PlanAssemblerTest {
 
     private List<Plan> assemble(ProblemInstance instance, int versionNo) {
         return assembler.assemble(
-                1L, solution(), instance, EPOCH, DAY, consignments(), vehicleId -> versionNo);
+                1L, DEPOT_ID, solution(), instance, EPOCH, DAY, consignments(), vehicleId -> versionNo);
     }
 
     @Test
@@ -138,7 +140,7 @@ class PlanAssemblerTest {
         final var empty = new Solution(List.of(new Route(7L, new int[0], 0L, 0)), new int[0], 0L);
 
         final var plans = assembler.assemble(
-                1L, empty, instance(0, 500, 1000), EPOCH, DAY, consignments(), vehicleId -> 1);
+                1L, DEPOT_ID, empty, instance(0, 500, 1000), EPOCH, DAY, consignments(), vehicleId -> 1);
 
         assertThat(plans).isEmpty();
     }

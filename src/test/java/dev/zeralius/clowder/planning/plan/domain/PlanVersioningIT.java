@@ -48,7 +48,7 @@ class PlanVersioningIT {
 
     private Long draft(int versionNo) {
         final var run = runs.save(new PlanRun(depotId(), DAY, "test", 1L, 1000));
-        return plans.save(new Plan(run.getId(), vehicleId, DAY, versionNo, 1_000L, 60))
+        return plans.save(new Plan(run.getId(), depotId(), vehicleId, DAY, versionNo, 1_000L, 60))
                 .getId();
     }
 
