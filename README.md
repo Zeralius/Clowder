@@ -88,7 +88,7 @@ by polling. The pool is small, bounded and CPU-sized; when its queue is full the
 
 | Method | Path | What it does | Who |
 | --- | --- | --- | --- |
-| `POST` | `/api/auth/token` | Username and password in, bearer token out | anyone |
+| `POST` | `/api/auth/token` | Username and password in, bearer token out. Rate limited | anyone |
 | `GET POST PUT DELETE` | `/api/users` | Account management. `DELETE` deactivates | admin |
 | `GET POST PUT DELETE` | `/api/depots`, `/api/depots/{id}` | Depot CRUD. `DELETE` deactivates, `POST /{id}/reactivate` undoes it | admin writes, all read |
 | `GET POST PUT DELETE` | `/api/vehicles` | Vehicle CRUD. `DELETE` deactivates | admin writes, all read |
@@ -136,8 +136,31 @@ a hash, or a hint of either. An ArchUnit rule stops anything outside the securit
 `SecurityContextHolder`, which is what keeps "who may do this?" in one place instead of spread across
 every module that happens to care.
 
+**The token endpoint is rate limited, and what it counts against is the decision worth reading.**
+Two budgets, both counting failures only and both refusing before any bcrypt work is done, because
+spending a hash on a request already over budget is the cost being avoided. Five failures for one
+username *from one address*, twenty from one address across all usernames, in a sliding fifteen minute
+window, answered with a 429 and a `Retry-After` measured from the oldest failure still counting.
+
+The per-username budget is keyed on the caller address as well, and that is not an accident. A budget
+keyed on the username alone means anyone who knows a dispatcher signs in here can take them off the
+air for fifteen minutes by posting five wrong passwords: the lockout becomes the attack, and it costs
+the attacker nothing. Keyed per address, a wrong guess from somewhere else cannot touch the real user,
+while guessing from any one source is still capped. A successful sign-in clears that user's count and
+deliberately does not refund the address budget, or an attacker holding one valid account could wipe
+their own spray allowance whenever they liked.
+
+What it does not do: one account guessed from many addresses at once is capped per address and not in
+total, which needs a botnet and is bounded by the twelve-character password floor; the counters are in
+memory, so two instances mean two budgets and twice the allowance; and nothing here limits requests in
+general, which belongs at a reverse proxy rather than in the application. `X-Forwarded-For` is
+ignored, because trusting a client-supplied header would make the address budget free to bypass — one
+new value per request and every attempt looks like a new caller. Behind a proxy that overwrites it,
+set `server.forward-headers-strategy`.
+
 All errors come back as RFC 9457 problem documents, so you always get `type`, `title`, `status` and
-`detail`, plus a field-level `errors` list when validation fails.
+`detail`, plus a field-level `errors` list when validation fails. A 429 carries a `Retry-After`
+header beside the document, because a 429 with no hint invites an immediate retry.
 
 ## How it fits together
 
@@ -450,8 +473,12 @@ Not done yet, roughly in the order of how much they matter:
 - **Tokens cannot be revoked before they expire.** They are stateless and signed, so deactivating an
   account stops new tokens rather than existing ones, for up to the eight hour lifetime. Refresh
   tokens and a deny list are the usual answer and neither is here.
-- **The token endpoint is not rate limited.** Nothing slows down an attacker working through a
-  password list except bcrypt itself, which is something but is not a lockout.
+- **The login rate limit lives in memory, per instance.** Two instances mean two budgets and twice
+  the allowance. Shared counters need shared state — Redis, a table, or doing it at the proxy — and
+  an account guessed from many addresses at once is capped per address rather than in total.
+- **Nothing limits requests in general.** The rate limit protects the token endpoint against password
+  guessing and nothing else. A caller with a valid token can hammer any endpoint as fast as it will
+  answer, which is a reverse proxy's job rather than the application's.
 
 ## Credits
 

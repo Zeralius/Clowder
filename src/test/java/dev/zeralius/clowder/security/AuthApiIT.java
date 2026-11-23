@@ -7,6 +7,7 @@ import dev.zeralius.clowder.security.api.CreateUserRequest;
 import dev.zeralius.clowder.security.api.TokenRequest;
 import dev.zeralius.clowder.security.api.TokenResponse;
 import dev.zeralius.clowder.security.api.UserResponse;
+import dev.zeralius.clowder.security.domain.LoginRateLimiter;
 import dev.zeralius.clowder.security.domain.Role;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,10 +42,18 @@ class AuthApiIT {
     @Autowired
     TestTokens tokens;
 
+    @Autowired
+    LoginRateLimiter limiter;
+
     private RestTestClient rest;
 
     @BeforeEach
     void bindToTheRunningServer() {
+        // Several tests here sign in wrongly on purpose, and the failure counts are in memory and
+        // shared with every other test in this context. Without this, these tests pass or fail
+        // depending on what ran before them.
+        limiter.clear();
+
         rest = RestTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
     }
 

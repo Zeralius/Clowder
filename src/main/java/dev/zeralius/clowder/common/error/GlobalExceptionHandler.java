@@ -29,6 +29,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private static final URI CONFLICT_TYPE = URI.create("https://clowder.eu/errors/conflict");
     private static final URI VALIDATION_TYPE = URI.create("https://clowder.eu/errors/validation");
     private static final URI FORBIDDEN_TYPE = URI.create("https://clowder.eu/errors/forbidden");
+    private static final URI TOO_MANY_REQUESTS_TYPE = URI.create("https://clowder.eu/errors/too-many-requests");
 
     @ExceptionHandler(NotFoundException.class)
     ProblemDetail handleNotFound(NotFoundException ex) {
@@ -49,6 +50,25 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setTitle("Forbidden");
         problem.setType(FORBIDDEN_TYPE);
         return problem;
+    }
+
+    /**
+     * 429 with a {@code Retry-After} in seconds, which is the part a client can act on: without it the
+     * only sensible thing to do with a 429 is to retry immediately and make it worse.
+     *
+     * <p>Never zero, because {@code Retry-After: 0} invites exactly that.
+     */
+    @ExceptionHandler(TooManyRequestsException.class)
+    ResponseEntity<ProblemDetail> handleTooManyRequests(TooManyRequestsException ex) {
+        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+        problem.setTitle("Too many requests");
+        problem.setType(TOO_MANY_REQUESTS_TYPE);
+
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(
+                        HttpHeaders.RETRY_AFTER,
+                        Long.toString(Math.max(1, ex.getRetryAfter().toSeconds())))
+                .body(problem);
     }
 
     @ExceptionHandler(ConflictException.class)

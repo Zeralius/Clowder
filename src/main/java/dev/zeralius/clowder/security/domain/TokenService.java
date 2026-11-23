@@ -41,29 +41,43 @@ public class TokenService {
     private final PasswordEncoder passwordEncoder;
     private final JwtEncoder jwtEncoder;
     private final SecurityProperties properties;
+    private final LoginRateLimiter rateLimiter;
 
     public TokenService(
             AppUserRepository users,
             PasswordEncoder passwordEncoder,
             JwtEncoder jwtEncoder,
-            SecurityProperties properties) {
+            SecurityProperties properties,
+            LoginRateLimiter rateLimiter) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.jwtEncoder = jwtEncoder;
         this.properties = properties;
+        this.rateLimiter = rateLimiter;
     }
 
+    /**
+     * @param callerAddress where the request came from, for the rate limit. Passed in rather than
+     *     read here, because a service that reaches for the current servlet request is a service that
+     *     can only ever be called from one
+     */
     @Transactional(readOnly = true)
-    public TokenResponse issue(TokenRequest request) {
+    public TokenResponse issue(TokenRequest request, String callerAddress) {
+        // Before the lookup and before the hash: a request already over budget must not cost a bcrypt,
+        // which is the work this is protecting.
+        rateLimiter.requireAllowed(request.username(), callerAddress);
+
         final var found = users.findByUsername(request.username());
 
         final var hash = found.map(AppUser::getPasswordHash).orElse(ABSENT_USER_HASH);
         final var passwordMatches = passwordEncoder.matches(request.password(), hash);
 
         if (found.isEmpty() || !passwordMatches || !found.get().isActive()) {
+            rateLimiter.recordFailure(request.username(), callerAddress);
             throw new BadCredentialsException("Invalid username or password");
         }
 
+        rateLimiter.recordSuccess(request.username(), callerAddress);
         return tokenFor(found.get());
     }
 
