@@ -92,9 +92,7 @@ class PlanPublishConcurrencyIT {
                         startGate.await();
                         publisher.publish(planId);
                         published.incrementAndGet();
-                    } catch (ConflictException
-                            | DataIntegrityViolationException
-                            | ConcurrencyFailureException e) {
+                    } catch (ConflictException | DataIntegrityViolationException | ConcurrencyFailureException e) {
                         // All three mean the same thing to a caller and all three become a 409: the
                         // unique index refused the insert, or the row this thread meant to supersede
                         // had already moved under it.
@@ -148,7 +146,9 @@ class PlanPublishConcurrencyIT {
                 DAY);
         assertThat(count).isEqualTo(1);
 
-        assertThat(indexExists()).as("uq_plan_published is what makes this milestone true").isTrue();
+        assertThat(indexExists())
+                .as("uq_plan_published is what makes this milestone true")
+                .isTrue();
     }
 
     private boolean indexExists() {

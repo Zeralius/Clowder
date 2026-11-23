@@ -3,6 +3,7 @@ package dev.zeralius.clowder.consignment.persistence;
 import dev.zeralius.clowder.consignment.domain.Consignment;
 import dev.zeralius.clowder.consignment.domain.ConsignmentStatus;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,4 +24,8 @@ public interface ConsignmentRepository extends JpaRepository<Consignment, Long> 
     /** Covered exactly by {@code idx_consignment_planning}. This is M3's hot query. */
     List<Consignment> findByDepotIdAndServiceDateAndStatus(
             Long depotId, LocalDate serviceDate, ConsignmentStatus status);
+
+    /** The same index, now that more than one status is plannable. */
+    List<Consignment> findByDepotIdAndServiceDateAndStatusIn(
+            Long depotId, LocalDate serviceDate, Collection<ConsignmentStatus> statuses);
 }

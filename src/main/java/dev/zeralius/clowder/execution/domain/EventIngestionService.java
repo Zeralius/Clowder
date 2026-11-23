@@ -1,10 +1,14 @@
 package dev.zeralius.clowder.execution.domain;
 
 import dev.zeralius.clowder.common.error.ConflictException;
+import dev.zeralius.clowder.consignment.ConsignmentFacade;
 import dev.zeralius.clowder.execution.api.EventResponse;
 import dev.zeralius.clowder.execution.api.RecordEventRequest;
 import dev.zeralius.clowder.execution.persistence.DriverEventRepository;
 import dev.zeralius.clowder.planning.PlanningFacade;
+import dev.zeralius.clowder.planning.plan.api.PlanResponse;
+import dev.zeralius.clowder.planning.plan.api.PlanStopResponse;
+import java.util.Set;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,12 +32,22 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class EventIngestionService {
 
+    private static final Set<String> ACCEPTS_EVENTS = Set.of("PUBLISHED", "SUPERSEDED");
+
     private final DriverEventRepository events;
     private final PlanningFacade plans;
+    private final ConsignmentFacade consignments;
+    private final ExecutionStateUpdater state;
 
-    public EventIngestionService(DriverEventRepository events, PlanningFacade plans) {
+    public EventIngestionService(
+            DriverEventRepository events,
+            PlanningFacade plans,
+            ConsignmentFacade consignments,
+            ExecutionStateUpdater state) {
         this.events = events;
         this.plans = plans;
+        this.consignments = consignments;
+        this.state = state;
     }
 
     @Transactional
@@ -45,6 +59,7 @@ public class EventIngestionService {
 
         // Throws NotFoundException when there is no such plan, which the handler turns into a 404.
         final var plan = plans.findPlan(planId);
+        requireAcceptsEvents(plan);
 
         if (request.type().isStopScoped()) {
             requireStopOnPlan(plan, request.planStopId());
@@ -70,7 +85,57 @@ public class EventIngestionService {
                     events.findByIdempotencyKey(request.idempotencyKey()).orElseThrow(() -> e), true);
         }
 
+        applyToConsignments(plan, event);
+
+        // The materialised projection is refreshed in this transaction, not after it. A log the cache
+        // has not seen is a cache that is quietly wrong, and rolling both back together is cheaper
+        // than any reconciliation that would otherwise be needed later.
+        state.refresh(planId, plan.stops());
+
         return EventResponse.from(event, false);
+    }
+
+    /**
+     * A driver works from a published plan. A superseded one is accepted too, and deliberately: a
+     * driver halfway through v1 when the dispatcher publishes v2 is still delivering real parcels, and
+     * dropping those reports to keep the model tidy would lose the only record of what happened.
+     * A draft has never been given to anyone, and a cancelled plan was called off.
+     */
+    private static void requireAcceptsEvents(PlanResponse plan) {
+        if (!ACCEPTS_EVENTS.contains(plan.status().name())) {
+            throw new ConflictException(
+                    "Plan %d is %s, so it has no driver to report against".formatted(plan.id(), plan.status()));
+        }
+    }
+
+    /**
+     * The order lifecycle, moved by what the driver reported. The event log stays the record of what
+     * happened; this is the consequence for the consignment, which the rest of the business reads.
+     *
+     * <p>Only the events that mean something to an order are handled. An {@code ARRIVED} says where
+     * the van is, not what became of the parcel.
+     */
+    private void applyToConsignments(PlanResponse plan, DriverEvent event) {
+        switch (event.getEventType()) {
+            case DEPARTED_DEPOT ->
+                consignments.markDispatched(plan.stops().stream()
+                        .map(PlanStopResponse::consignmentId)
+                        .toList());
+            case DELIVERED -> consignments.markDelivered(consignmentOf(plan, event.getPlanStopId()));
+            case FAILED -> consignments.markFailed(consignmentOf(plan, event.getPlanStopId()));
+            case ARRIVED, DEPARTED, RETURNED_DEPOT -> {
+                // Nothing to say about the order itself.
+            }
+        }
+    }
+
+    private static Long consignmentOf(PlanResponse plan, Long planStopId) {
+        return plan.stops().stream()
+                .filter(stop -> planStopId.equals(stop.id()))
+                .map(PlanStopResponse::consignmentId)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Stop %d vanished from plan %d mid-transaction".formatted(planStopId, plan.id())));
     }
 
     /**
@@ -85,8 +150,7 @@ public class EventIngestionService {
         return stored;
     }
 
-    private static void requireStopOnPlan(
-            dev.zeralius.clowder.planning.plan.api.PlanResponse plan, Long planStopId) {
+    private static void requireStopOnPlan(dev.zeralius.clowder.planning.plan.api.PlanResponse plan, Long planStopId) {
         if (planStopId == null) {
             throw new ConflictException("A stop-scoped event needs a planStopId");
         }

@@ -1,5 +1,6 @@
 package dev.zeralius.clowder.importer;
 
+import dev.zeralius.clowder.common.geo.DistanceModel;
 import dev.zeralius.clowder.common.time.TimeWindow;
 import dev.zeralius.clowder.consignment.api.CreateConsignmentRequest;
 import dev.zeralius.clowder.consignment.domain.ConsignmentService;
@@ -78,7 +79,11 @@ public class SolomonImportService {
                 instance.name() + " (Solomon instance)",
                 latitudeOf(instance.depot()),
                 longitudeOf(instance.depot()),
-                "UTC"));
+                "UTC",
+                // Explicit, and the whole reason the column exists: these coordinates are abstract
+                // plane units, and projecting them onto a sphere would destroy the comparison with
+                // the published best-known results.
+                DistanceModel.EUCLIDEAN));
 
         for (var i = 1; i <= instance.vehicleCount(); i++) {
             vehicles.create(new CreateVehicleRequest(
@@ -122,9 +127,8 @@ public class SolomonImportService {
      */
     private static Instant windowEnd(Instant midnight, SolomonCustomer customer) {
         if (customer.dueTime() <= customer.readyTime()) {
-            throw new IllegalArgumentException(
-                    "Customer %d has due time %d not after ready time %d"
-                            .formatted(customer.id(), customer.dueTime(), customer.readyTime()));
+            throw new IllegalArgumentException("Customer %d has due time %d not after ready time %d"
+                    .formatted(customer.id(), customer.dueTime(), customer.readyTime()));
         }
         return midnight.plusSeconds(customer.dueTime() * 60L);
     }

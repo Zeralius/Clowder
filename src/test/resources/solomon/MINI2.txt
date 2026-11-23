@@ -1,0 +1,12 @@
+MINI2
+
+VEHICLE
+NUMBER     CAPACITY
+   2          700
+
+CUSTOMER
+CUST NO.  XCOORD.   YCOORD.    DEMAND   READY TIME   DUE DATE   SERVICE TIME
+
+    0      40.00     50.00      0.00       0.00      3390.00       0.00
+    1      25.00     85.00     20.00    1180.00      1280.00      90.00
+    2      22.00     75.00     30.00    2100.00      2200.00      90.00

@@ -49,8 +49,8 @@ public final class PlanAssembler {
             if (route.isEmpty()) {
                 continue;
             }
-            plans.add(assembleOne(
-                    planRunId, depotId, route, instance, epoch, serviceDate, consignments, nextVersionFor));
+            plans.add(
+                    assembleOne(planRunId, depotId, route, instance, epoch, serviceDate, consignments, nextVersionFor));
         }
 
         return plans;

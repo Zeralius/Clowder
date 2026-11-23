@@ -21,8 +21,7 @@ class PlanImmutabilityTest {
     }
 
     private static PlanStop stop() {
-        return new PlanStop(
-                0, 42L, "REF-1", "Somewhere 1", Instant.EPOCH, Instant.EPOCH, Instant.EPOCH, 0, 0L, 0L);
+        return new PlanStop(0, 42L, "REF-1", "Somewhere 1", Instant.EPOCH, Instant.EPOCH, Instant.EPOCH, 0, 0L, 0L);
     }
 
     @Test

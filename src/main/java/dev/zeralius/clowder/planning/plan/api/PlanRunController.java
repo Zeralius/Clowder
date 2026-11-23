@@ -16,10 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Solves a depot-day, stores the result as draft plans, and hands back the run.
  *
- * <p><b>Why 202 and a Location header when the work has already finished.</b> The shape is what a
- * worker needs, and changing an API contract later is expensive while writing it this way now is
- * free. A client that polls {@code GET /api/plan-runs/{id}} keeps working unchanged on the day the
- * solve moves off the request thread.
+ * <p>The 202 and the {@code Location} header were written before there was a worker, so that the
+ * contract would not have to change on the day there was one. It did not: the solve now happens on a
+ * pool and a client that was already polling {@code GET /api/plan-runs/{id}} needed no change at all.
  */
 @RestController
 @RequestMapping("/api/plan-runs")
@@ -35,9 +34,13 @@ public class PlanRunController {
         this.rendering = rendering;
     }
 
+    /**
+     * Returns as soon as the run exists. The solve happens on a worker, so the body usually comes back
+     * with status RUNNING and the caller follows {@code Location} until it is SUCCEEDED or FAILED.
+     */
     @PostMapping
     ResponseEntity<PlanRunResponse> create(@Valid @RequestBody PlanRunRequest request) {
-        final var runId = runs.execute(request);
+        final var runId = runs.submit(request);
         return ResponseEntity.accepted()
                 .location(URI.create("/api/plan-runs/" + runId))
                 .body(queries.findRun(runId));

@@ -13,6 +13,7 @@ import dev.zeralius.clowder.planning.plan.domain.PlanStatus;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Comparator;
@@ -68,7 +69,26 @@ class PlanRunApiIT {
         return post(new PlanRunRequest(imported.depotId(), SERVICE_DATE, 2, seed));
     }
 
+    /** The accepted response names the run and nothing has to have happened yet. */
+    @Test
+    void acceptingARunReturnsItBeforeTheSolveHasFinished() {
+        final var imported = importer.importFrom(fixture(), SERVICE_DATE);
+
+        final var accepted = accept(new PlanRunRequest(imported.depotId(), SERVICE_DATE, 2, null));
+
+        assertThat(accepted.id()).isNotNull();
+        assertThat(accepted.status()).isIn(PlanRunStatus.RUNNING, PlanRunStatus.SUCCEEDED);
+        assertThat(accepted.startedAt()).isNotNull();
+
+        assertThat(awaitRun(accepted.id()).status()).isEqualTo(PlanRunStatus.SUCCEEDED);
+    }
+
+    /** Posts the run and follows it to completion, which is what a real client does with the 202. */
     private PlanRunResponse post(PlanRunRequest request) {
+        return awaitRun(accept(request).id());
+    }
+
+    private PlanRunResponse accept(PlanRunRequest request) {
         return rest.post()
                 .uri("/api/plan-runs")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -81,6 +101,39 @@ class PlanRunApiIT {
                 .expectBody(PlanRunResponse.class)
                 .returnResult()
                 .getResponseBody();
+    }
+
+    private PlanRunResponse getRun(Long id) {
+        return rest.get()
+                .uri("/api/plan-runs/" + id)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(PlanRunResponse.class)
+                .returnResult()
+                .getResponseBody();
+    }
+
+    /**
+     * The solve happens on a worker, so the run is usually RUNNING when the 202 comes back and the
+     * caller polls. This is that poll, and it is the only thing the move to a worker changed about
+     * how a client uses the resource.
+     */
+    private PlanRunResponse awaitRun(Long id) {
+        final var deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos();
+        while (System.nanoTime() < deadline) {
+            final var run = getRun(id);
+            if (run.status() != PlanRunStatus.RUNNING) {
+                return run;
+            }
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
+        throw new AssertionError("Plan run " + id + " was still RUNNING after 30s");
     }
 
     private PlanResponse plan(Long id) {
@@ -135,14 +188,7 @@ class PlanRunApiIT {
     void theRunIsReadableBackAtItsOwnUrl() {
         final var created = run(null);
 
-        final var fetched = rest.get()
-                .uri("/api/plan-runs/" + created.id())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody(PlanRunResponse.class)
-                .returnResult()
-                .getResponseBody();
+        final var fetched = getRun(created.id());
 
         assertThat(fetched.id()).isEqualTo(created.id());
         assertThat(fetched.planIds()).isEqualTo(created.planIds());
@@ -208,8 +254,7 @@ class PlanRunApiIT {
 
         final var vehicleId = plan(firstPlanId).vehicleId();
 
-        final var second = post(new PlanRunRequest(
-                first.depotId(), SERVICE_DATE, 2, null));
+        final var second = post(new PlanRunRequest(first.depotId(), SERVICE_DATE, 2, null));
         final var secondPlanId = plansOf(second).stream()
                 .filter(plan -> plan.vehicleId().equals(vehicleId))
                 .map(PlanResponse::id)
@@ -333,7 +378,8 @@ class PlanRunApiIT {
         assertThat(totalDistance(second)).isEqualTo(totalDistance(first));
 
         // Same vehicle-day, so the second run is version 2 of each plan.
-        assertThat(plansOf(second)).allSatisfy(plan -> assertThat(plan.versionNo()).isEqualTo(2));
+        assertThat(plansOf(second))
+                .allSatisfy(plan -> assertThat(plan.versionNo()).isEqualTo(2));
     }
 
     private List<List<Long>> stopsOf(PlanRunResponse run) {

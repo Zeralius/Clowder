@@ -2,8 +2,11 @@ package dev.zeralius.clowder.planning.plan.domain;
 
 import dev.zeralius.clowder.common.error.ConflictException;
 import dev.zeralius.clowder.common.error.NotFoundException;
+import dev.zeralius.clowder.consignment.ConsignmentFacade;
 import dev.zeralius.clowder.planning.plan.api.PlanResponse;
 import dev.zeralius.clowder.planning.plan.persistence.PlanRepository;
+import java.util.HashSet;
+import java.util.Set;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -23,9 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class PlanPublisher {
 
     private final PlanRepository plans;
+    private final ConsignmentFacade consignments;
 
-    public PlanPublisher(PlanRepository plans) {
+    public PlanPublisher(PlanRepository plans, ConsignmentFacade consignments) {
         this.plans = plans;
+        this.consignments = consignments;
     }
 
     @Transactional
@@ -35,12 +40,14 @@ public class PlanPublisher {
         // Checked before anything is written, so a plan that was already published or cancelled fails
         // without first superseding the version that is legitimately live.
         if (!plan.getStatus().canTransitionTo(PlanStatus.PUBLISHED)) {
-            throw new ConflictException(
-                    "Plan %d cannot move from %s to PUBLISHED".formatted(planId, plan.getStatus()));
+            throw new ConflictException("Plan %d cannot move from %s to PUBLISHED".formatted(planId, plan.getStatus()));
         }
 
-        final var current = plans.findByVehicleIdAndServiceDateAndStatus(
+        final var current = plans.findWithStopsByVehicleIdAndServiceDateAndStatus(
                 plan.getVehicleId(), plan.getServiceDate(), PlanStatus.PUBLISHED);
+
+        final var superseded = current.map(PlanPublisher::consignmentIdsOf).orElseGet(Set::of);
+
         if (current.isPresent()) {
             current.get().supersede();
             // Two flushes, not one. Hibernate is free to order the statements in a single flush as it
@@ -65,6 +72,28 @@ public class PlanPublisher {
                     .formatted(plan.getVehicleId(), plan.getServiceDate()));
         }
 
+        // Publishing is what makes a route real, so this is where the orders on it stop being
+        // loose work and become planned. Driven here rather than by hand, which is what it was until
+        // now: the state machine has had these transitions since M1 and nothing used them.
+        final var planned = consignmentIdsOf(plan);
+        consignments.markPlanned(planned);
+
+        // Anything that was on the version this replaces and is not on the new one has been pulled
+        // off the route, so it goes back to the pool. That is what PLANNED -> PENDING is for.
+        final var dropped = new HashSet<>(superseded);
+        dropped.removeAll(planned);
+        if (!dropped.isEmpty()) {
+            consignments.markPending(dropped);
+        }
+
         return PlanQueryService.toResponse(plan);
+    }
+
+    private static Set<Long> consignmentIdsOf(Plan plan) {
+        final var ids = new HashSet<Long>(plan.getStops().size());
+        for (final var stop : plan.getStops()) {
+            ids.add(stop.getConsignmentId());
+        }
+        return ids;
     }
 }

@@ -5,6 +5,8 @@
 --
 -- Children first, all the way down: plan_stop and plan_run_unassigned cascade from their parents,
 -- but naming them keeps the order obvious to the next person to add a table.
+delete from plan_stop_state;
+delete from plan_execution_state;
 delete from driver_event;
 delete from plan_stop;
 delete from plan;
@@ -15,8 +17,8 @@ delete from driver;
 delete from vehicle;
 delete from depot;
 
-insert into depot (code, name, latitude, longitude, timezone)
-values ('PLN', 'Plan Test Depot', 51.656000, 7.090000, 'UTC');
+insert into depot (code, name, latitude, longitude, timezone, distance_model)
+values ('PLN', 'Plan Test Depot', 51.656000, 7.090000, 'UTC', 'HAVERSINE');
 
 insert into vehicle (depot_id, registration, capacity_grams, capacity_millilitres,
                      shift_start, shift_minutes, avg_speed_kph, active)

@@ -11,7 +11,12 @@ import dev.zeralius.clowder.consignment.api.CreateConsignmentRequest;
 import dev.zeralius.clowder.consignment.persistence.ConsignmentRepository;
 import dev.zeralius.clowder.fleet.FleetFacade;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +24,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional(readOnly = true)
 public class ConsignmentService implements ConsignmentFacade {
+
+    private static final Logger log = LoggerFactory.getLogger(ConsignmentService.class);
+
+    /** What a planner may still put on a route. Dispatched means the driver already has it. */
+    private static final Set<ConsignmentStatus> PLANNABLE =
+            EnumSet.of(ConsignmentStatus.PENDING, ConsignmentStatus.PLANNED);
 
     private final ConsignmentRepository consignments;
     private final FleetFacade fleet;
@@ -51,11 +62,71 @@ public class ConsignmentService implements ConsignmentFacade {
 
     @Override
     public List<ConsignmentResponse> findPlannableFor(Long depotId, LocalDate serviceDate) {
-        return consignments
-                .findByDepotIdAndServiceDateAndStatus(depotId, serviceDate, ConsignmentStatus.PENDING)
-                .stream()
+        return consignments.findByDepotIdAndServiceDateAndStatusIn(depotId, serviceDate, PLANNABLE).stream()
                 .map(ConsignmentMapper::toResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public void markPlanned(Collection<Long> consignmentIds) {
+        advanceAll(consignmentIds, ConsignmentStatus.PLANNED);
+    }
+
+    @Override
+    @Transactional
+    public void markPending(Collection<Long> consignmentIds) {
+        advanceAll(consignmentIds, ConsignmentStatus.PENDING);
+    }
+
+    @Override
+    @Transactional
+    public void markDispatched(Collection<Long> consignmentIds) {
+        advanceAll(consignmentIds, ConsignmentStatus.DISPATCHED);
+    }
+
+    @Override
+    @Transactional
+    public void markDelivered(Long consignmentId) {
+        advanceAll(List.of(consignmentId), ConsignmentStatus.DELIVERED);
+    }
+
+    @Override
+    @Transactional
+    public void markFailed(Long consignmentId) {
+        advanceAll(List.of(consignmentId), ConsignmentStatus.FAILED);
+    }
+
+    private void advanceAll(Collection<Long> consignmentIds, ConsignmentStatus target) {
+        for (final var consignment : consignments.findAllById(consignmentIds)) {
+            advance(consignment, target);
+        }
+    }
+
+    /**
+     * Walks the state machine towards {@code target} rather than demanding a single legal hop.
+     *
+     * <p>The path is at most two steps in this lifecycle, so it is found by looking one state ahead
+     * instead of with a graph search. A consignment already at the target, or stuck somewhere with no
+     * way forward, is left exactly as it is: this is called from publishing a plan and from ingesting
+     * driver events, and neither should fail because an order was cancelled an hour ago.
+     */
+    private void advance(Consignment consignment, ConsignmentStatus target) {
+        if (consignment.getStatus() == target) {
+            return;
+        }
+        if (consignment.getStatus().canTransitionTo(target)) {
+            consignment.transitionTo(target);
+            return;
+        }
+        for (final var step : consignment.getStatus().allowedTargets()) {
+            if (step.canTransitionTo(target)) {
+                consignment.transitionTo(step);
+                consignment.transitionTo(target);
+                return;
+            }
+        }
+        log.debug("Leaving consignment {} at {}: no path to {}", consignment.getId(), consignment.getStatus(), target);
     }
 
     @Transactional
@@ -90,8 +161,7 @@ public class ConsignmentService implements ConsignmentFacade {
 
     @Transactional
     public ConsignmentResponse transition(Long id, ConsignmentStatus target) {
-        var consignment =
-                consignments.findById(id).orElseThrow(() -> new NotFoundException("Consignment", id));
+        var consignment = consignments.findById(id).orElseThrow(() -> new NotFoundException("Consignment", id));
 
         consignment.transitionTo(target);
 

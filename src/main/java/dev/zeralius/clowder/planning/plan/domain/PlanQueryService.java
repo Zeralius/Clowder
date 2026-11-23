@@ -96,7 +96,9 @@ public class PlanQueryService implements PlanningFacade {
                 run.getFailureReason(),
                 run.getStartedAt(),
                 run.getFinishedAt(),
-                run.getUnassigned().stream().map(UnassignedConsignment::getReference).toList(),
+                run.getUnassigned().stream()
+                        .map(UnassignedConsignment::getReference)
+                        .toList(),
                 planIds);
     }
 

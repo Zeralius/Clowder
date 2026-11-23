@@ -126,15 +126,70 @@ class ConsignmentServiceIT {
                 .hasMessageContaining("PENDING");
     }
 
+    /**
+     * Pending and planned work is both plannable: replanning a published day means rebuilding the
+     * routes the planned consignments are already on. Once a consignment is dispatched the driver is
+     * holding it, so a planner can no longer move it.
+     */
     @Test
-    void findPlannableForReturnsOnlyPendingWork() {
+    void findPlannableForReturnsPendingAndPlannedButNotDispatchedWork() {
         consignments.create(newConsignment("CON-0007"));
+
         var planned = consignments.create(newConsignment("CON-0008")).id();
         consignments.transition(planned, ConsignmentStatus.PLANNED);
 
+        var dispatched = consignments.create(newConsignment("CON-0011")).id();
+        consignments.transition(dispatched, ConsignmentStatus.PLANNED);
+        consignments.transition(dispatched, ConsignmentStatus.DISPATCHED);
+
         assertThat(consignments.findPlannableFor(depotId, SERVICE_DATE))
                 .extracting(ConsignmentResponse::reference)
-                .containsExactly("CON-0007");
+                .containsExactlyInAnyOrder("CON-0007", "CON-0008");
+    }
+
+    /**
+     * The lifecycle marks are idempotent and walk intermediate states, because they are called from
+     * publishing a plan and from ingesting driver events, and neither has clean paperwork to rely on.
+     */
+    @Test
+    void markDeliveredWalksThroughDispatchedFromPlanned() {
+        var id = consignments.create(newConsignment("CON-0012")).id();
+        consignments.markPlanned(java.util.List.of(id));
+
+        consignments.markDelivered(id);
+
+        assertThat(consignments.findById(id).status()).isEqualTo(ConsignmentStatus.DELIVERED);
+    }
+
+    @Test
+    void aMarkThatIsAlreadyTrueDoesNothing() {
+        var id = consignments.create(newConsignment("CON-0013")).id();
+        consignments.markPlanned(java.util.List.of(id));
+        consignments.markPlanned(java.util.List.of(id));
+
+        assertThat(consignments.findById(id).status()).isEqualTo(ConsignmentStatus.PLANNED);
+    }
+
+    /** A cancelled order is never dragged back out of a terminal state by a stray event. */
+    @Test
+    void aMarkLeavesATerminalConsignmentAlone() {
+        var id = consignments.create(newConsignment("CON-0014")).id();
+        consignments.transition(id, ConsignmentStatus.CANCELLED);
+
+        consignments.markDelivered(id);
+
+        assertThat(consignments.findById(id).status()).isEqualTo(ConsignmentStatus.CANCELLED);
+    }
+
+    /** Unplan: pulled off a route that was superseded and not replaced. */
+    @Test
+    void markPendingUnplansAConsignment() {
+        var id = consignments.create(newConsignment("CON-0015")).id();
+        consignments.markPlanned(java.util.List.of(id));
+
+        consignments.markPending(java.util.List.of(id));
+
+        assertThat(consignments.findById(id).status()).isEqualTo(ConsignmentStatus.PENDING);
     }
 
     @Test

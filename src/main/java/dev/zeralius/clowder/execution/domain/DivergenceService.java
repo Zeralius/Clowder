@@ -1,13 +1,15 @@
 package dev.zeralius.clowder.execution.domain;
 
-import dev.zeralius.clowder.common.geo.EuclideanDistanceProvider;
 import dev.zeralius.clowder.common.geo.LatLon;
 import dev.zeralius.clowder.consignment.ConsignmentFacade;
 import dev.zeralius.clowder.consignment.api.ConsignmentResponse;
 import dev.zeralius.clowder.execution.api.ProjectedMiss;
 import dev.zeralius.clowder.execution.api.TrackingResponse;
 import dev.zeralius.clowder.execution.persistence.DriverEventRepository;
+import dev.zeralius.clowder.execution.persistence.PlanExecutionStateRepository;
+import dev.zeralius.clowder.execution.persistence.PlanStopStateRepository;
 import dev.zeralius.clowder.fleet.FleetFacade;
+import dev.zeralius.clowder.fleet.api.DepotResponse;
 import dev.zeralius.clowder.planning.PlanningFacade;
 import dev.zeralius.clowder.planning.feasibility.RouteEvaluator;
 import dev.zeralius.clowder.planning.feasibility.Violation;
@@ -15,6 +17,7 @@ import dev.zeralius.clowder.planning.model.DistanceMatrix;
 import dev.zeralius.clowder.planning.model.ProblemInstance;
 import dev.zeralius.clowder.planning.model.StopSpec;
 import dev.zeralius.clowder.planning.model.VehicleSpec;
+import dev.zeralius.clowder.planning.plan.api.PlanResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -43,6 +46,8 @@ public class DivergenceService {
     private final DriverEventRepository events;
     private final ConsignmentFacade consignments;
     private final FleetFacade fleet;
+    private final PlanExecutionStateRepository planState;
+    private final PlanStopStateRepository stopState;
     private final PlanProjector projector = new PlanProjector();
     private final RouteEvaluator evaluator = new RouteEvaluator();
 
@@ -50,19 +55,22 @@ public class DivergenceService {
             PlanningFacade plans,
             DriverEventRepository events,
             ConsignmentFacade consignments,
-            FleetFacade fleet) {
+            FleetFacade fleet,
+            PlanExecutionStateRepository planState,
+            PlanStopStateRepository stopState) {
         this.plans = plans;
         this.events = events;
         this.consignments = consignments;
         this.fleet = fleet;
+        this.planState = planState;
+        this.stopState = stopState;
     }
 
     @Transactional(readOnly = true)
     public TrackingResponse track(Long planId, Instant now) {
         final var plan = plans.findPlan(planId);
 
-        final var projection =
-                projector.project(planId, plan.stops(), events.findByPlanIdOrderByOccurredAtAscIdAsc(planId));
+        final var projection = storedProjection(planId, plan).orElseGet(() -> fold(planId, plan));
 
         final var misses = projectMisses(plan.depotId(), plan.vehicleId(), plan.serviceDate(), projection, now);
 
@@ -74,6 +82,54 @@ public class DivergenceService {
                 projection.lastKnownDeparture(),
                 projection.stops(),
                 misses);
+    }
+
+    /**
+     * Reads the materialised projection, which the updater wrote in the same transaction as the event
+     * that changed it. The stop count has to match the plan: a mismatch means the cache predates a
+     * change, and folding the log is both correct and the honest fallback.
+     */
+    private java.util.Optional<PlanProjection> storedProjection(Long planId, PlanResponse plan) {
+        final var header = planState.findById(planId);
+        if (header.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+
+        final var stops = stopState.findByPlanIdOrderByPlanStopIdAsc(planId);
+        if (stops.size() != plan.stops().size()) {
+            return java.util.Optional.empty();
+        }
+
+        // Plan sequence, not stop id: the materialised rows are keyed by id and a dispatcher reads
+        // a route in the order it is driven.
+        final var order = new HashMap<Long, Integer>();
+        for (final var stop : plan.stops()) {
+            order.put(stop.id(), stop.sequenceNo());
+        }
+
+        final var inSequence = stops.stream()
+                .sorted(java.util.Comparator.comparingInt(row -> order.getOrDefault(row.getPlanStopId(), 0)))
+                .map(PlanStopState::toStopState)
+                .toList();
+
+        final var state = header.get();
+        return java.util.Optional.of(new PlanProjection(
+                planId,
+                state.getStopsCompleted(),
+                state.getStopsRemaining(),
+                state.getCurrentDelayMinutes(),
+                state.getLastKnownDeparture(),
+                state.getLastCompletedStop(),
+                inSequence));
+    }
+
+    /**
+     * The fallback, and the reason the cache is safe to have: the fold is still here, still correct,
+     * and used whenever the stored rows cannot be trusted. A plan nobody has reported against yet has
+     * no stored rows at all, which is the common case for this branch.
+     */
+    private PlanProjection fold(Long planId, PlanResponse plan) {
+        return projector.project(planId, plan.stops(), events.findByPlanIdOrderByOccurredAtAscIdAsc(planId));
     }
 
     /**
@@ -96,12 +152,12 @@ public class DivergenceService {
 
         final var byId = byConsignmentId(consignments.findForServiceDate(depotId, serviceDate));
 
-        final var origin = originOf(projection, byId, depotId);
+        final var depot = fleet.findDepotById(depotId);
+        final var origin = originOf(projection, byId, depot);
 
         // The vehicle has been driving since its last report, so the clock is whichever is later.
-        final var startedAt = projection.lastKnownDeparture() == null
-                ? now
-                : latestOf(projection.lastKnownDeparture(), now);
+        final var startedAt =
+                projection.lastKnownDeparture() == null ? now : latestOf(projection.lastKnownDeparture(), now);
 
         final var points = new ArrayList<LatLon>();
         points.add(origin);
@@ -133,9 +189,9 @@ public class DivergenceService {
             return List.of();
         }
 
-        // Euclidean, the same hard-coded choice the planner makes, so the projection and the plan
-        // disagree about geography in the same direction rather than in two different ones.
-        final var matrix = DistanceMatrix.from(points, new EuclideanDistanceProvider());
+        // The depot decides the geometry, exactly as it does when the plan is built. If these two
+        // disagreed, every projection would be wrong by a conversion factor and look plausible.
+        final var matrix = DistanceMatrix.from(points, depot.distanceModel().provider(slowestSpeedKph(depotId)));
 
         // A deliberately unconstrained vehicle: the question is about time windows, not capacity or
         // shift length, and a capacity violation here would say nothing a dispatcher could act on.
@@ -161,7 +217,19 @@ public class DivergenceService {
         return misses;
     }
 
-    private LatLon originOf(PlanProjection projection, Map<Long, ConsignmentResponse> byId, Long depotId) {
+    /**
+     * One matrix serves the whole projection, so travel time uses the slowest vehicle at the depot,
+     * for the same reason the planner does: being optimistic here would under-report the misses.
+     */
+    private double slowestSpeedKph(Long depotId) {
+        return fleet.findActiveVehiclesAt(depotId).stream()
+                .map(vehicle -> vehicle.avgSpeedKph())
+                .min(java.util.Comparator.naturalOrder())
+                .map(java.math.BigDecimal::doubleValue)
+                .orElse(1d);
+    }
+
+    private LatLon originOf(PlanProjection projection, Map<Long, ConsignmentResponse> byId, DepotResponse depot) {
         if (projection.lastCompletedStopId() != null) {
             final var last = projection.stops().stream()
                     .filter(stop -> projection.lastCompletedStopId().equals(stop.planStopId()))
@@ -172,7 +240,6 @@ public class DivergenceService {
             }
         }
 
-        final var depot = fleet.findDepotById(depotId);
         return new LatLon(depot.latitude(), depot.longitude());
     }
 

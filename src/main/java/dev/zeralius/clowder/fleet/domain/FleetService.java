@@ -7,6 +7,7 @@ import dev.zeralius.clowder.fleet.FleetFacade;
 import dev.zeralius.clowder.fleet.api.CreateDepotRequest;
 import dev.zeralius.clowder.fleet.api.DepotResponse;
 import dev.zeralius.clowder.fleet.api.DriverResponse;
+import dev.zeralius.clowder.fleet.api.UpdateDepotRequest;
 import dev.zeralius.clowder.fleet.api.VehicleResponse;
 import dev.zeralius.clowder.fleet.persistence.DepotRepository;
 import java.util.List;
@@ -54,9 +55,7 @@ public class FleetService implements FleetFacade {
 
     @Override
     public DepotResponse findDepotById(Long id) {
-        return depots.findById(id)
-                .map(DepotMapper::toResponse)
-                .orElseThrow(() -> new NotFoundException("Depot", id));
+        return depots.findById(id).map(DepotMapper::toResponse).orElseThrow(() -> new NotFoundException("Depot", id));
     }
 
     @Transactional
@@ -65,15 +64,62 @@ public class FleetService implements FleetFacade {
             throw new ConflictException("A depot with code '%s' already exists".formatted(request.code()));
         }
         var depot = new Depot(
-                request.code(), request.name(), request.latitude(), request.longitude(), request.timezone());
+                request.code(),
+                request.name(),
+                request.latitude(),
+                request.longitude(),
+                request.timezone(),
+                request.distanceModelOrDefault());
         return DepotMapper.toResponse(depots.save(depot));
+    }
+
+    /**
+     * No {@code save()}: the entity is managed, so dirty checking flushes at commit. Same shape as
+     * {@code VehicleService.update}, and the {@code @Version} column added with the lifecycle is what
+     * stops two dispatchers overwriting each other.
+     */
+    @Transactional
+    public DepotResponse updateDepot(Long id, UpdateDepotRequest request) {
+        var depot = depots.findById(id).orElseThrow(() -> new NotFoundException("Depot", id));
+        depot.rename(request.name());
+        depot.relocate(request.latitude(), request.longitude(), request.distanceModel());
+        depot.moveToTimezone(request.timezone());
+        return DepotMapper.toResponse(depot);
+    }
+
+    /**
+     * Deactivating rather than deleting, the same verb as vehicles and drivers (decision D3). A depot
+     * is referenced by plans and consignments that still have to be readable next year.
+     */
+    @Transactional
+    public void deactivateDepot(Long id) {
+        var depot = depots.findById(id).orElseThrow(() -> new NotFoundException("Depot", id));
+        depot.deactivate();
+    }
+
+    @Transactional
+    public DepotResponse reactivateDepot(Long id) {
+        var depot = depots.findById(id).orElseThrow(() -> new NotFoundException("Depot", id));
+        depot.reactivate();
+        return DepotMapper.toResponse(depot);
+    }
+
+    /**
+     * For callers that need the depot to still be in service, such as starting a plan run. A closed
+     * depot can be read all day; it just cannot be given new work.
+     */
+    @Override
+    public DepotResponse findActiveDepotById(Long id) {
+        var depot = findDepotById(id);
+        if (!depot.active()) {
+            throw new ConflictException("Depot %d is not active".formatted(id));
+        }
+        return depot;
     }
 
     /** Used by the importer: idempotent, so re-importing an instance does not fail. */
     @Transactional
     public DepotResponse findOrCreateDepot(CreateDepotRequest request) {
-        return depots.findByCode(request.code())
-                .map(DepotMapper::toResponse)
-                .orElseGet(() -> createDepot(request));
+        return depots.findByCode(request.code()).map(DepotMapper::toResponse).orElseGet(() -> createDepot(request));
     }
 }

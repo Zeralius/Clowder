@@ -13,7 +13,8 @@ final class DepotMapper {
                 depot.getName(),
                 depot.getLatitude(),
                 depot.getLongitude(),
-                depot.getTimezone()
-        );
+                depot.getTimezone(),
+                depot.getDistanceModel(),
+                depot.isActive());
     }
 }

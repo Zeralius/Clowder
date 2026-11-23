@@ -71,7 +71,7 @@ class DepotApiIT {
     @Test
     void createsADepotWithALocationHeader() {
         var request = new CreateDepotRequest(
-                "ESS", "Essen Hub", new BigDecimal("51.4556"), new BigDecimal("7.0116"), "Europe/Berlin");
+                "ESS", "Essen Hub", new BigDecimal("51.4556"), new BigDecimal("7.0116"), "Europe/Berlin", null);
 
         var created = rest.post()
                 .uri("/api/depots")

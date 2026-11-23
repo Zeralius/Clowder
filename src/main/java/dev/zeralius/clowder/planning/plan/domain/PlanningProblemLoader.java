@@ -1,11 +1,11 @@
 package dev.zeralius.clowder.planning.plan.domain;
 
 import dev.zeralius.clowder.common.error.NotFoundException;
-import dev.zeralius.clowder.common.geo.EuclideanDistanceProvider;
 import dev.zeralius.clowder.common.geo.LatLon;
 import dev.zeralius.clowder.consignment.ConsignmentFacade;
 import dev.zeralius.clowder.consignment.api.ConsignmentResponse;
 import dev.zeralius.clowder.fleet.FleetFacade;
+import dev.zeralius.clowder.fleet.api.VehicleResponse;
 import dev.zeralius.clowder.planning.model.DistanceMatrix;
 import dev.zeralius.clowder.planning.model.ProblemInstance;
 import dev.zeralius.clowder.planning.model.StopSpec;
@@ -40,7 +40,7 @@ public class PlanningProblemLoader {
     /** Short and read-only. Everything it returns is detached, immutable data. */
     @Transactional(readOnly = true)
     public LoadedProblem load(Long depotId, LocalDate serviceDate) {
-        final var depot = fleet.findDepotById(depotId);
+        final var depot = fleet.findActiveDepotById(depotId);
 
         final var vehicles = fleet.findActiveVehiclesAt(depotId);
         if (vehicles.isEmpty()) {
@@ -76,17 +76,28 @@ public class PlanningProblemLoader {
                     v.id(),
                     v.capacityGrams(),
                     v.capacityMillilitres(),
-                    minutesFrom(epoch, v.shiftStart().atDate(serviceDate).atZone(zone).toInstant()),
+                    minutesFrom(
+                            epoch,
+                            v.shiftStart().atDate(serviceDate).atZone(zone).toInstant()),
                     v.shiftMinutes(),
                     0));
         }
 
-        // Euclidean because the benchmark instances are plane units; swap for haversine on real
-        // geography, and keep the choice per-instance rather than global. Today it is neither:
-        // it is hard-coded, and the README says so.
-        final var matrix = DistanceMatrix.from(points, new EuclideanDistanceProvider());
+        // The depot says which geometry its coordinates are in, so a benchmark import is measured
+        // with Euclidean distance and a real depot with haversine, without anything here deciding.
+        // One matrix serves every vehicle in the run, so travel time uses the slowest of them: a
+        // matrix that is optimistic about travel time produces plans nobody can drive.
+        final var matrix = DistanceMatrix.from(points, depot.distanceModel().provider(slowestSpeedKph(vehicles)));
 
         return new LoadedProblem(new ProblemInstance(specs, stops, matrix, 0), points, work, epoch, zone);
+    }
+
+    private static double slowestSpeedKph(List<VehicleResponse> vehicles) {
+        return vehicles.stream()
+                .map(VehicleResponse::avgSpeedKph)
+                .min(java.util.Comparator.naturalOrder())
+                .orElseThrow()
+                .doubleValue();
     }
 
     private static int minutesFrom(Instant epoch, Instant when) {

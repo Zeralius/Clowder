@@ -16,6 +16,12 @@ public interface FleetFacade {
     /** One depot by id, with its coordinates. Planning and execution both need the depot location. */
     DepotResponse findDepotById(Long id);
 
+    /**
+     * The same, but refusing a depot that has been closed. Reading a closed depot is fine; giving it
+     * new work is not, so a plan run goes through this one.
+     */
+    DepotResponse findActiveDepotById(Long id);
+
     List<VehicleResponse> findActiveVehiclesAt(Long depotId);
 
     List<DriverResponse> findActiveDriversAt(Long depotId);

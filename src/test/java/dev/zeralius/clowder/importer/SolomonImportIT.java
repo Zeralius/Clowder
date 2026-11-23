@@ -41,9 +41,39 @@ class SolomonImportIT {
     FleetFacade fleet;
 
     private static Reader fixture() {
+        return fixture("MINI");
+    }
+
+    private static Reader fixture(String name) {
         var stream = Objects.requireNonNull(
-                SolomonImportIT.class.getResourceAsStream("/solomon/MINI.txt"), "fixture missing");
+                SolomonImportIT.class.getResourceAsStream("/solomon/" + name + ".txt"), "fixture missing");
         return new InputStreamReader(stream, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Decision D6, closed. A type-2 horizon is about 3390 minutes and the check constraint on
+     * {@code shift_minutes} used to stop at 2880, which made more than half the benchmark set
+     * impossible to import through the API. The solver never cared; the column did.
+     */
+    @Test
+    void importsATypeTwoHorizonThatUsedToBreachTheShiftCap() {
+        var result = importer.importFrom(fixture("MINI2"), SERVICE_DATE);
+
+        assertThat(result.horizonMinutes()).isEqualTo(3390);
+        assertThat(result.vehiclesCreated()).isEqualTo(2);
+
+        assertThat(fleet.findActiveVehiclesAt(result.depotId()))
+                .isNotEmpty()
+                .allSatisfy(vehicle -> assertThat(vehicle.shiftMinutes()).isEqualTo(3390));
+    }
+
+    /** The importer declares the geometry, so these coordinates stay plane units. */
+    @Test
+    void anImportedDepotIsMeasuredWithEuclideanDistance() {
+        var result = importer.importFrom(fixture(), SERVICE_DATE);
+
+        assertThat(fleet.findDepotById(result.depotId()).distanceModel())
+                .isEqualTo(dev.zeralius.clowder.common.geo.DistanceModel.EUCLIDEAN);
     }
 
     @Test

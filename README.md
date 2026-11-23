@@ -50,16 +50,25 @@ curl -X POST localhost:8080/api/plan-runs/svg \
   -d '{"depotId":1,"serviceDate":"2026-01-05","budgetSeconds":5}' > routes.svg
 ```
 
-A plan run produces one draft plan per vehicle it used, and returns 202 with their ids. Each stop
-carries the arrival, service start and departure time the feasibility engine worked out, and the run
-itself lists any consignments no vehicle could take. Publishing is a separate step, so a dispatcher
-sees what the solver proposed before any driver does.
+A plan run produces one draft plan per vehicle it used. Each stop carries the arrival, service start
+and departure time the feasibility engine worked out, and the run itself lists any consignments no
+vehicle could take. Publishing is a separate step, so a dispatcher sees what the solver proposed
+before any driver does.
+
+**The solve happens on a worker.** `POST /api/plan-runs` returns 202 as soon as the run row exists
+and the caller polls `GET /api/plan-runs/{id}` until it is `SUCCEEDED` or `FAILED`. The resource was
+written in that shape before there was a worker precisely so that the contract would not have to
+change on the day there was one, and it did not. What the request thread still does is load the
+problem, because an unknown depot, a closed one, or a depot with no active vehicles is a bad request
+and deserves a 404 in the response to the request that made it rather than a `FAILED` run to discover
+by polling. The pool is small, bounded and CPU-sized; when its queue is full the run is marked
+`FAILED` with a reason, which is a worse answer than "solved" and a much better one than silence.
 
 ## The API
 
 | Method | Path | What it does |
 | --- | --- | --- |
-| `GET POST` | `/api/depots`, `/api/depots/{id}` | Depot list, create, read |
+| `GET POST PUT DELETE` | `/api/depots`, `/api/depots/{id}` | Depot CRUD. `DELETE` deactivates, `POST /{id}/reactivate` undoes it |
 | `GET POST PUT DELETE` | `/api/vehicles` | Vehicle CRUD. `DELETE` deactivates |
 | `GET POST PUT DELETE` | `/api/drivers` | Driver CRUD. `DELETE` deactivates |
 | `GET POST` | `/api/consignments` | Create, and list by `serviceDate` with optional `depotId` |
@@ -184,11 +193,30 @@ until something answers, so a retry is a successful call, not a 409 — the clie
 told me already" from "thanks" and should not have to. The lookup is the behaviour and the unique
 constraint is the backstop for two retries landing in the same millisecond.
 
-**State is derived, never stored twice.** Stop status is a projection over the log. If it were also a
-column on `plan_stop` that column would be a cache, and `ProjectionRebuildIT` — which shuffles the
-log and asserts the same answer comes out — is worth more than the column would be. The event log is
-append-only: `DriverEvent` has no setters at all, which a test checks by reflection, so there is no
-`UPDATE` for Hibernate to write.
+**State is derived, and the stored copy has to prove it.** Stop status is a fold over the log, and
+`plan_execution_state` and `plan_stop_state` hold the result so that tracking is a read rather than a
+fold of the whole log on every call. That makes them a cache, and the only thing that makes a cache
+acceptable here is being able to show it equals what it caches: the updater recomputes the whole
+plan's projection and overwrites, rather than patching a delta, so it cannot drift by construction;
+`rebuild` takes the same path deliberately; and `MaterialisedProjectionIT` checks the stored rows
+against a fresh fold, repairs a cache it has deliberately corrupted, and confirms that tracking falls
+back to folding when the stored rows are incomplete. The fold never went away, which is the point.
+
+Recomputing a whole plan on every event is more work than applying one event's delta, and that is the
+trade on purpose. A plan log is tens of events. An incremental fold would have to get every
+out-of-order and duplicate case right a second time, somewhere else, with the precedence rules
+duplicated — and the projector already does that, correctly, with tests.
+
+The log itself is append-only: `DriverEvent` has no setters at all, which a test checks by reflection,
+so there is no `UPDATE` for Hibernate to write.
+
+**And what the driver reports moves the order, not just the event log.** Publishing a plan moves the
+consignments on it to `PLANNED`, leaving the depot dispatches them, and a `DELIVERED` or `FAILED`
+report moves that one consignment on. The marks are idempotent, they never drag a cancelled order
+back out of a terminal state, and they walk an intermediate step rather than demanding it: a delivery
+whose `DEPARTED_DEPOT` never arrived still means the parcel was delivered, and refusing it because
+the paperwork is out of order would be absurd. Planned work stays plannable, which is what lets a
+dispatcher replan a published day; dispatched work does not, because the driver is holding it.
 
 And the projected misses are the reason M2 was built the way it was. They are not a new algorithm:
 `DivergenceService` rebuilds a one-vehicle problem containing only the stops that are left, starting
@@ -205,7 +233,7 @@ park turns into a delivery.
 
 ```bash
 ./mvnw test     # 171 unit tests, no Docker needed
-./mvnw verify   # the above plus 90 integration tests on Testcontainers, needs Docker
+./mvnw verify   # the above plus 113 integration tests on Testcontainers, needs Docker
 ```
 
 The name decides which plugin runs a test. A `*Test` class runs under Surefire and must not touch a
@@ -321,40 +349,45 @@ coordinate and still match published results exactly. These instances have to be
 Euclidean distance and never haversine, because projecting them onto real geography would destroy
 the comparison.
 
+**Which geometry to measure in is a property of the depot, not a setting.** `depot.distance_model` is
+`EUCLIDEAN` or `HAVERSINE`, the importer declares `EUCLIDEAN` explicitly for the reason above, and a
+hand-created depot defaults to haversine because real geography is the normal case. The planner and
+the divergence projection both read it from the depot, so they cannot disagree — which matters more
+than it sounds, because if they did, every projected miss would be wrong by a conversion factor and
+would still look plausible.
+
+**Haversine travel time comes from the slowest active vehicle at the depot.** One distance matrix
+serves every vehicle in a run, so travel time cannot be per-vehicle without a matrix per vehicle.
+Taking the slowest is the pessimistic choice on purpose: a matrix that is optimistic about travel
+time produces plans nobody can drive.
+
 **The instance format carries no date**, so imports default to `2026-01-05` with the depot in UTC,
 and travel time equals distance because the vehicle speed is nominal and unused.
 
 ## Status
 
 The story is complete end to end: reference data in, a benchmark instance imported, a depot-day
-solved, plans published as versioned artifacts with the publish rule enforced by the database,
-driver events ingested idempotently, and plan against reality reported from the event log.
+solved on a worker, plans published as versioned artifacts with the publish rule enforced by the
+database, the orders on them moved through their lifecycle by publishing and by what drivers report,
+driver events ingested idempotently, and plan against reality read from a materialised projection of
+the event log.
 
 Not done yet, roughly in the order of how much they matter:
 
-- **Publishing a plan does not move its consignments.** They stay `PENDING` rather than becoming
-  `PLANNED` and then `DELIVERED`, so the consignment lifecycle is not yet driven by planning or by
-  execution. Replanning a published day works precisely because of that, and the state machine and
-  its allowed transitions are in place, but nothing drives them. This is the first thing I would do
-  next: a published plan should move its stops to `PLANNED`, and a `DELIVERED` event should move that
-  consignment to `DELIVERED`.
-- **Divergence is read on demand, not pushed.** `GET /api/plans/{id}/tracking` recomputes the
-  projection per call. That is cheap at a depot-day of a few hundred rows and would not be at a
-  thousand vehicles; the fix is a materialised projection, and the rebuild test is what would make
-  that safe to add.
-- **A plan run holds the request thread.** It is shaped for a worker — 202, a `Location` header, a
-  run you poll — but the solve still happens inline, so a five second budget is a five second
-  request.
-- **The distance model is hard-coded to Euclidean** in the planning loader and again in the
-  divergence projection. Real depots need haversine, and that choice should be made per instance
-  rather than per build. The two places agree, which is the only reason this is a limitation and not
-  a bug.
-- **Depot has no update or deactivate**, because the table has no `active` column. Inventing a
-  lifecycle before anything needs one would be a migration for its own sake.
-- **`shift_minutes` is capped at 2880**, which rules out Solomon type-2 horizons until a migration
-  raises it.
-- **No CI and no code formatter** wired into the build.
-- **No licence file.**
+- **Divergence misses are computed per request.** The projection is materialised, but the projected
+  window misses are not and cannot be: they depend on what time it is now. That is one evaluator run
+  over the stops a driver has left, so it is small, but it is per call.
+- **One distance matrix per run, so one average speed.** Travel time under haversine comes from the
+  slowest active vehicle at the depot, because a matrix is shared by every vehicle in the run.
+  Honouring a per-vehicle speed needs a matrix per vehicle, which is a real change rather than a
+  tweak.
+- **Travel time under haversine is a straight line at a fixed speed.** Real routing needs a routing
+  engine; an OSRM provider behind a cache is the obvious next step and the interface already has the
+  shape for it.
+- **Pagination is offset based.** Fine at a depot-day of a few hundred rows, wrong at scale, and
+  cursor pagination is not implemented.
+- **The event log has no retention policy.** It only grows, and at some point a day that closed six
+  months ago wants archiving rather than indexing.
 
 ## Credits
 
