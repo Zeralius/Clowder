@@ -1,0 +1,45 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A second push to the same branch cancels the first: the only run anyone reads is the latest one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Testcontainers needs a Docker daemon, which ubuntu-latest already has, so there is nothing
+      # to start here. It does mean this job cannot move to a runner without one.
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      # verify, not test: it runs Surefire, then Failsafe against a real Postgres, then the Spotless
+      # check. Anything less would leave the integration tests and the formatter unproven on CI,
+      # which are the two things hardest to remember to run by hand.
+      - name: Build
+        run: ./mvnw --batch-mode --no-transfer-progress verify
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            target/surefire-reports/
+            target/failsafe-reports/
+          retention-days: 7
+          if-no-files-found: ignore

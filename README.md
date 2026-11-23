@@ -1,5 +1,7 @@
 # Clowder
 
+[![build](https://github.com/Zeralius/Clowder/actions/workflows/build.yml/badge.svg)](https://github.com/Zeralius/Clowder/actions/workflows/build.yml)
+
 Route planning for a small delivery fleet. You keep depots, vehicles, drivers and consignments in
 it, and then ask it to turn one day's deliveries into routes that respect vehicle capacity, customer
 time windows and driver shift lengths. You publish those routes as the plan the drivers work from,
@@ -233,11 +235,16 @@ park turns into a delivery.
 
 ```bash
 ./mvnw test     # 171 unit tests, no Docker needed
-./mvnw verify   # the above plus 113 integration tests on Testcontainers, needs Docker
+./mvnw verify   # the above plus 115 integration tests on Testcontainers, needs Docker
 ```
 
 The name decides which plugin runs a test. A `*Test` class runs under Surefire and must not touch a
 database. An `*IT` class runs under Failsafe and may.
+
+`verify` also runs Spotless, so a badly formatted tree fails the build. `./mvnw spotless:apply`
+fixes it. GitHub Actions runs exactly `./mvnw verify` on every push and pull request, which is why
+that one command has to cover the formatter and the integration tests rather than just the fast
+ones.
 
 ## Benchmarks
 
