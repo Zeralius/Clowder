@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
@@ -80,6 +81,18 @@ public class Plan {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    /**
+     * The username of whoever published this version, or null while it is a draft.
+     *
+     * <p>A name rather than an account id, because the only endpoint that resolves an id is
+     * admin-only: an id here would be an audit trail that the dispatchers reading the plan could not
+     * follow. It is an identity and not a snapshot of one only as long as usernames stay unique,
+     * accounts are deactivated rather than deleted, and nothing renames them; {@code V012} says the
+     * same thing next to the column.
+     */
+    @Column(name = "published_by", length = 64)
+    private String publishedBy;
+
     /** JPA optimistic locking, deliberately not called {@code version}; see the class comment. */
     @Version
     @Column(name = "lock_version", nullable = false)
@@ -135,9 +148,17 @@ public class Plan {
         this.driverId = driverId;
     }
 
-    public void publish() {
+    /**
+     * Publishing takes the publisher, rather than offering a setter beside it, so that a plan cannot
+     * reach PUBLISHED without recording who put it there. The database says the same thing in
+     * {@code plan_published_by_check}; this is where it is a compile error instead of a constraint
+     * violation.
+     */
+    public void publish(String publishedBy) {
+        Objects.requireNonNull(publishedBy, "a plan cannot be published by nobody");
         transitionTo(PlanStatus.PUBLISHED);
         this.publishedAt = Instant.now();
+        this.publishedBy = publishedBy;
     }
 
     public void supersede() {
@@ -197,6 +218,10 @@ public class Plan {
 
     public Instant getPublishedAt() {
         return publishedAt;
+    }
+
+    public String getPublishedBy() {
+        return publishedBy;
     }
 
     public long getLockVersion() {

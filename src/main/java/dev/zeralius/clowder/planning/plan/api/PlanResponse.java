@@ -10,6 +10,7 @@ import java.util.List;
  *
  * @param versionNo the version a dispatcher reads; v2 supersedes v1 rather than replacing it
  * @param totalDistance in the distance matrix minor units, not metres (decision D7)
+ * @param publishedBy the account that published this version, or null while it is a draft
  */
 public record PlanResponse(
         Long id,
@@ -23,5 +24,6 @@ public record PlanResponse(
         long totalDistance,
         int totalDurationMinutes,
         Instant publishedAt,
+        String publishedBy,
         Instant createdAt,
         List<PlanStopResponse> stops) {}

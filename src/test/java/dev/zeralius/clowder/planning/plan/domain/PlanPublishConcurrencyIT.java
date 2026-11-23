@@ -6,6 +6,7 @@ import dev.zeralius.clowder.TestcontainersConfiguration;
 import dev.zeralius.clowder.common.error.ConflictException;
 import dev.zeralius.clowder.planning.plan.persistence.PlanRepository;
 import dev.zeralius.clowder.planning.plan.persistence.PlanRunRepository;
+import dev.zeralius.clowder.security.TestAuth;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -64,6 +66,10 @@ class PlanPublishConcurrencyIT {
 
     @BeforeEach
     void createCompetingDrafts() {
+        // For the publish that happens on this thread. The racing threads install their own, because
+        // the security context is thread-local and nothing propagates it into a pool.
+        TestAuth.asDispatcher();
+
         final var depotId = jdbc.queryForObject("select id from depot where code = ?", Long.class, "PLN");
         final var vehicleId =
                 jdbc.queryForObject("select id from vehicle where registration = ?", Long.class, "PLAN-01");
@@ -77,6 +83,11 @@ class PlanPublishConcurrencyIT {
         }
     }
 
+    @AfterEach
+    void clearTheCaller() {
+        TestAuth.clear();
+    }
+
     @Test
     void atMostOnePlanEndsUpPublishedAndNobodySeesAnUnexpectedFailure() throws Exception {
         final var startGate = new CountDownLatch(1);
@@ -86,9 +97,17 @@ class PlanPublishConcurrencyIT {
         final var unexpected = new ArrayList<Throwable>();
 
         try (var pool = Executors.newFixedThreadPool(THREADS)) {
-            for (final var planId : draftIds) {
+            for (var index = 0; index < draftIds.size(); index++) {
+                final var planId = draftIds.get(index);
+                // Version n came from draftIds[n-1], so naming the dispatcher after the version they
+                // publish lets the attribution be checked row by row below.
+                final var dispatcher = "dispatcher-" + (index + 1);
                 pool.submit(() -> {
                     try {
+                        // The security context is thread-local, so each thread installs its own. That
+                        // is what makes these twenty dispatchers rather than one, and it is the only
+                        // way a publisher recorded on a row could come out wrong.
+                        TestAuth.asDispatcher(dispatcher);
                         startGate.await();
                         publisher.publish(planId);
                         published.incrementAndGet();
@@ -102,6 +121,7 @@ class PlanPublishConcurrencyIT {
                             unexpected.add(t);
                         }
                     } finally {
+                        TestAuth.clear();
                         finished.countDown();
                     }
                 });
@@ -125,6 +145,11 @@ class PlanPublishConcurrencyIT {
                 .hasSize(published.get() - 1);
         assertThat(all.stream().filter(plan -> plan.getStatus() == PlanStatus.DRAFT))
                 .hasSize(THREADS - published.get());
+
+        // Attribution follows the transaction, not the pool: whichever threads got through, every row
+        // carries the dispatcher that published that row and not a neighbour.
+        assertThat(all.stream().filter(plan -> plan.getStatus() != PlanStatus.DRAFT))
+                .allSatisfy(plan -> assertThat(plan.getPublishedBy()).isEqualTo("dispatcher-" + plan.getVersionNo()));
 
         assertThat(plans.findByVehicleIdAndServiceDateAndStatus(
                         all.getFirst().getVehicleId(), DAY, PlanStatus.PUBLISHED))

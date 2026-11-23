@@ -5,6 +5,7 @@ import dev.zeralius.clowder.common.error.NotFoundException;
 import dev.zeralius.clowder.consignment.ConsignmentFacade;
 import dev.zeralius.clowder.planning.plan.api.PlanResponse;
 import dev.zeralius.clowder.planning.plan.persistence.PlanRepository;
+import dev.zeralius.clowder.security.CurrentUser;
 import java.util.HashSet;
 import java.util.Set;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -27,10 +28,12 @@ public class PlanPublisher {
 
     private final PlanRepository plans;
     private final ConsignmentFacade consignments;
+    private final CurrentUser currentUser;
 
-    public PlanPublisher(PlanRepository plans, ConsignmentFacade consignments) {
+    public PlanPublisher(PlanRepository plans, ConsignmentFacade consignments, CurrentUser currentUser) {
         this.plans = plans;
         this.consignments = consignments;
+        this.currentUser = currentUser;
     }
 
     @Transactional
@@ -57,7 +60,10 @@ public class PlanPublisher {
             plans.flush();
         }
 
-        plan.publish();
+        // Read before the write, so a publish is attributed to the caller that asked for it and not
+        // to whatever the request thread happens to hold afterwards. Who may publish at all is a role
+        // rule and is settled in the filter chain long before this method runs.
+        plan.publish(currentUser.require().username());
 
         try {
             // Force the write now. Without this the index check happens at commit, after this method

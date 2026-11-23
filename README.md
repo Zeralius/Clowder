@@ -101,7 +101,7 @@ by polling. The pool is small, bounded and CPU-sized; when its queue is full the
 | `POST` | `/api/plan-runs/svg` | The same solve, drawn as SVG | dispatcher |
 | `GET` | `/api/plans/{id}` | One plan, with every stop and its planned times | its driver, or dispatcher |
 | `GET` | `/api/plans?vehicleId=&serviceDate=` | Every version for a vehicle-day, newest first | filtered per driver |
-| `POST` | `/api/plans/{id}/publish` | Publish a draft, superseding the version it replaces | dispatcher |
+| `POST` | `/api/plans/{id}/publish` | Publish a draft, superseding the version it replaces, under the caller name | dispatcher |
 | `POST` | `/api/plans/{id}/driver` | Roster a driver onto a plan | dispatcher |
 | `POST` | `/api/plans/{id}/events` | Record what a driver reported. Idempotent: a retry returns the original | its driver, or dispatcher |
 | `GET` | `/api/plans/{id}/tracking` | Progress, current delay, and the windows the rest of the route can no longer meet | its driver, or dispatcher |
@@ -428,8 +428,8 @@ and travel time equals distance because the vehicle speed is nominal and unused.
 The story is complete end to end: reference data in, a benchmark instance imported, a depot-day
 solved on a worker, plans published as versioned artifacts with the publish rule enforced by the
 database, the orders on them moved through their lifecycle by publishing and by what drivers report,
-driver events ingested idempotently, and plan against reality read from a materialised projection of
-the event log.
+driver events ingested idempotently, plan against reality read from a materialised projection of
+the event log, and every published version carrying the name of the account that published it.
 
 Not done yet, roughly in the order of how much they matter:
 
@@ -452,8 +452,6 @@ Not done yet, roughly in the order of how much they matter:
   tokens and a deny list are the usual answer and neither is here.
 - **The token endpoint is not rate limited.** Nothing slows down an attacker working through a
   password list except bcrypt itself, which is something but is not a lockout.
-- **Nothing records who published what.** The plan says it was published and when, not by whom.
-  There is now an authenticated identity to attribute it to, so this is cheap and worth doing.
 
 ## Credits
 

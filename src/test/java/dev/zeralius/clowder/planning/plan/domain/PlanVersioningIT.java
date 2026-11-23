@@ -8,12 +8,15 @@ import dev.zeralius.clowder.common.error.ConflictException;
 import dev.zeralius.clowder.common.error.NotFoundException;
 import dev.zeralius.clowder.planning.plan.persistence.PlanRepository;
 import dev.zeralius.clowder.planning.plan.persistence.PlanRunRepository;
+import dev.zeralius.clowder.security.TestAuth;
 import java.time.LocalDate;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
 
@@ -41,9 +44,18 @@ class PlanVersioningIT {
 
     @BeforeEach
     void readTheSeededVehicle() {
+        // Publishing is attributed to the caller, so these tests need one. First line of the existing
+        // setup rather than a second @BeforeEach, because JUnit does not define the order of those.
+        TestAuth.asDispatcher();
+
         // Identity columns keep counting across the deletes in the fixture, so the id is looked up
         // rather than assumed to be 1.
         vehicleId = jdbc.queryForObject("select id from vehicle where registration = ?", Long.class, "PLAN-01");
+    }
+
+    @AfterEach
+    void clearTheCaller() {
+        TestAuth.clear();
     }
 
     private Long draft(int versionNo) {
@@ -123,5 +135,44 @@ class PlanVersioningIT {
         assertThat(superseded.getVersionNo()).isEqualTo(1);
         assertThat(superseded.getPublishedAt()).isNotNull();
         assertThat(superseded.getStatus()).isEqualTo(PlanStatus.SUPERSEDED);
+    }
+
+    /**
+     * Attribution is part of the history, so a superseded version keeps the name of whoever published
+     * it rather than the name of whoever replaced it. That is the point of recording it at all: the
+     * question asked months later is who put that plan in front of a driver, not who last touched the
+     * vehicle-day.
+     */
+    @Test
+    void eachVersionKeepsThePublisherThatPublishedIt() {
+        final var first = draft(1);
+        final var second = draft(2);
+
+        TestAuth.asDispatcher("morning-shift");
+        publisher.publish(first);
+
+        TestAuth.asDispatcher("afternoon-shift");
+        publisher.publish(second);
+
+        assertThat(plans.findById(first).orElseThrow().getPublishedBy()).isEqualTo("morning-shift");
+        assertThat(plans.findById(second).orElseThrow().getPublishedBy()).isEqualTo("afternoon-shift");
+    }
+
+    @Test
+    void aDraftHasNoPublisher() {
+        assertThat(plans.findById(draft(1)).orElseThrow().getPublishedBy()).isNull();
+    }
+
+    /**
+     * The guarantee is in the database and not only in the entity, same as the publish rule itself:
+     * an UPDATE typed into psql cannot leave a published plan with nobody named on it either.
+     */
+    @Test
+    void theDatabaseRefusesAPublishedRowWithNoPublisher() {
+        final var planId = draft(1);
+
+        assertThatThrownBy(() -> jdbc.update("update plan set status = 'PUBLISHED' where id = ?", planId))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("plan_published_by_check");
     }
 }

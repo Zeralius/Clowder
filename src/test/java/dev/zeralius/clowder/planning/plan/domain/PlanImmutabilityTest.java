@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 class PlanImmutabilityTest {
 
     private static final LocalDate DAY = LocalDate.of(2026, 1, 5);
+    private static final String PUBLISHER = "dispatcher";
 
     private static Plan draft() {
         return new Plan(1L, 5L, 7L, DAY, 1, 1_000L, 60);
@@ -48,7 +49,7 @@ class PlanImmutabilityTest {
     @Test
     void aPublishedPlanRefusesNewStops() {
         final var plan = draft();
-        plan.publish();
+        plan.publish(PUBLISHER);
 
         assertThatThrownBy(() -> plan.addStop(stop()))
                 .isInstanceOf(ConflictException.class)
@@ -58,18 +59,18 @@ class PlanImmutabilityTest {
     @Test
     void aPublishedPlanCannotBePublishedAgain() {
         final var plan = draft();
-        plan.publish();
+        plan.publish(PUBLISHER);
 
-        assertThatThrownBy(plan::publish).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> plan.publish(PUBLISHER)).isInstanceOf(ConflictException.class);
     }
 
     @Test
     void aSupersededPlanIsTerminal() {
         final var plan = draft();
-        plan.publish();
+        plan.publish(PUBLISHER);
         plan.supersede();
 
-        assertThatThrownBy(plan::publish).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> plan.publish(PUBLISHER)).isInstanceOf(ConflictException.class);
         assertThatThrownBy(plan::supersede).isInstanceOf(ConflictException.class);
         assertThat(plan.getStatus().isTerminal()).isTrue();
     }
@@ -79,9 +80,32 @@ class PlanImmutabilityTest {
         final var plan = draft();
         assertThat(plan.getPublishedAt()).isNull();
 
-        plan.publish();
+        plan.publish(PUBLISHER);
 
         assertThat(plan.getPublishedAt()).isNotNull();
+    }
+
+    @Test
+    void publishingRecordsWhoDidIt() {
+        final var plan = draft();
+        assertThat(plan.getPublishedBy()).isNull();
+
+        plan.publish(PUBLISHER);
+
+        assertThat(plan.getPublishedBy()).isEqualTo(PUBLISHER);
+    }
+
+    /**
+     * The signature already stops a caller forgetting the publisher; this is about the caller that
+     * passes whatever it happens to be holding. A plan that reached PUBLISHED with nobody named on it
+     * would violate {@code plan_published_by_check} at flush, which is a worse place to find out.
+     */
+    @Test
+    void aPlanCannotBePublishedByNobody() {
+        final var plan = draft();
+
+        assertThatThrownBy(() -> plan.publish(null)).isInstanceOf(NullPointerException.class);
+        assertThat(plan.getStatus()).isEqualTo(PlanStatus.DRAFT);
     }
 
     @Test

@@ -176,6 +176,7 @@ class PlanRunApiIT {
             assertThat(plan.status()).isEqualTo(PlanStatus.DRAFT);
             assertThat(plan.versionNo()).isEqualTo(1);
             assertThat(plan.publishedAt()).isNull();
+            assertThat(plan.publishedBy()).isNull();
             assertThat(plan.stops()).isNotEmpty();
             assertThat(plan.totalDistance()).isPositive();
         });
@@ -250,6 +251,9 @@ class PlanRunApiIT {
 
         assertThat(published.status()).isEqualTo(PlanStatus.PUBLISHED);
         assertThat(published.publishedAt()).isNotNull();
+        // The name comes off the bearer token this client sends, not from anything in the request:
+        // there is no field a caller could publish under another name with.
+        assertThat(published.publishedBy()).isEqualTo("test-dispatcher");
         assertThat(plan(planId).status()).isEqualTo(PlanStatus.PUBLISHED);
     }
 

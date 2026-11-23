@@ -107,6 +107,7 @@ public class PlanQueryService implements PlanningFacade {
                 plan.getTotalDistance(),
                 plan.getTotalDurationMinutes(),
                 plan.getPublishedAt(),
+                plan.getPublishedBy(),
                 plan.getCreatedAt(),
                 plan.getStops().stream().map(PlanQueryService::toResponse).toList());
     }

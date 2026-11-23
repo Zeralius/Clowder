@@ -30,6 +30,11 @@ public final class TestAuth {
         install("dispatcher", Role.DISPATCHER, null);
     }
 
+    /** For tests about what gets recorded under whose name, where "a dispatcher" is not specific enough. */
+    public static void asDispatcher(String username) {
+        install(username, Role.DISPATCHER, null);
+    }
+
     public static void asDriver(Long driverId) {
         install("driver-" + driverId, Role.DRIVER, driverId);
     }
