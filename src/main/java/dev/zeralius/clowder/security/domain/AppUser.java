@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
@@ -21,6 +22,11 @@ import org.hibernate.generator.EventType;
  * module and the boundary rule has not changed since M1. It is also what answers the only
  * interesting authorisation question in this system — whether the person reporting a delivery is the
  * driver the plan was given to.
+ *
+ * <p>{@code tokensValidFrom} is how a token that has already been handed out stops working. Tokens
+ * are signed and carry no server state, so there is nothing to delete; instead every request checks
+ * that the token was issued at or after this instant. Moving it to now is therefore "sign this
+ * account out everywhere", in one write.
  *
  * <p>The password is stored as a bcrypt hash and nothing here can read it back. There is no getter
  * for it beyond what the authentication path needs, and no mutator that takes a plaintext string:
@@ -51,6 +57,13 @@ public class AppUser {
     @Column(nullable = false)
     private boolean active = true;
 
+    /**
+     * Tokens issued before this are refused. It starts at the moment the account is created, because
+     * no token for an account can predate the account.
+     */
+    @Column(name = "tokens_valid_from", nullable = false)
+    private Instant tokensValidFrom;
+
     @Version
     @Column(nullable = false)
     private long version;
@@ -78,10 +91,28 @@ public class AppUser {
         this.role = role;
         this.driverId = driverId;
         this.active = true;
+        // Truncated to the second, unlike a revocation, and the asymmetry is deliberate. A token
+        // carries its issue time in whole seconds, so a cutoff with a fraction in it refuses
+        // everything issued in the same second. At revocation time that is the safe direction and
+        // the price is a retried sign-in. Here there is nothing to be safe about -- the account has
+        // no tokens yet -- and the cost would be a brand-new account whose first token is dead
+        // because somebody signed in half a second after it was created.
+        this.tokensValidFrom = Instant.now().truncatedTo(ChronoUnit.SECONDS);
     }
 
     public void changePasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
+    }
+
+    /**
+     * Stops every token this account currently holds.
+     *
+     * <p>Every token, not one of them. A deny list keyed on individual token ids could revoke a
+     * single one, but the operation this system actually needs is the one that does not require
+     * knowing which token a thief is holding.
+     */
+    public void revokeIssuedTokens() {
+        this.tokensValidFrom = Instant.now();
     }
 
     public void deactivate() {
@@ -114,6 +145,10 @@ public class AppUser {
 
     public boolean isActive() {
         return active;
+    }
+
+    public Instant getTokensValidFrom() {
+        return tokensValidFrom;
     }
 
     public long getVersion() {

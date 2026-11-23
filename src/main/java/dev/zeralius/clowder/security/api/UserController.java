@@ -46,6 +46,18 @@ public class UserController {
         return users.changePassword(id, request.password());
     }
 
+    /**
+     * Stops every token this account is holding, right now, without deactivating it.
+     *
+     * <p>For a lost phone, where the account is fine and the tokens are not. A deactivation would do
+     * it too, but it would also take the driver off the road until somebody turned them back on.
+     */
+    @PostMapping("/{id}/sign-out")
+    ResponseEntity<Void> signOut(@PathVariable Long id) {
+        users.signOutEverywhere(id);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Deactivates, like every other DELETE here (decision D3). An account is audit history. */
     @DeleteMapping("/{id}")
     ResponseEntity<Void> deactivate(@PathVariable Long id) {

@@ -3,6 +3,7 @@ package dev.zeralius.clowder.security.domain;
 import dev.zeralius.clowder.common.error.ConflictException;
 import dev.zeralius.clowder.common.error.NotFoundException;
 import dev.zeralius.clowder.fleet.FleetFacade;
+import dev.zeralius.clowder.security.CurrentUser;
 import dev.zeralius.clowder.security.api.CreateUserRequest;
 import dev.zeralius.clowder.security.api.UserResponse;
 import dev.zeralius.clowder.security.persistence.AppUserRepository;
@@ -18,11 +19,13 @@ public class AppUserService {
     private final AppUserRepository users;
     private final TokenService tokens;
     private final FleetFacade fleet;
+    private final CurrentUser currentUser;
 
-    public AppUserService(AppUserRepository users, TokenService tokens, FleetFacade fleet) {
+    public AppUserService(AppUserRepository users, TokenService tokens, FleetFacade fleet, CurrentUser currentUser) {
         this.users = users;
         this.tokens = tokens;
         this.fleet = fleet;
+        this.currentUser = currentUser;
     }
 
     public List<UserResponse> findAll() {
@@ -54,16 +57,60 @@ public class AppUserService {
         return toResponse(users.save(user));
     }
 
+    /**
+     * Deactivating also revokes, and both are needed.
+     *
+     * <p>The deactivation is what stops the account now: every request re-reads whether it is active,
+     * so the token in a leaver's pocket dies on their next call. The revocation is about later —
+     * without it, reactivating the account would bring every token issued before the deactivation
+     * back to life, including the one that was taken away from them.
+     */
     @Transactional
     public void deactivate(Long id) {
-        users.findById(id).orElseThrow(() -> new NotFoundException("User", id)).deactivate();
+        final var user = users.findById(id).orElseThrow(() -> new NotFoundException("User", id));
+        user.deactivate();
+        user.revokeIssuedTokens();
     }
 
+    /**
+     * Changing a password signs the account out everywhere.
+     *
+     * <p>A password is changed either because it leaked or because somebody is tidying up, and only
+     * one of those is the common case worth optimising for. Leaving the old tokens alive would mean a
+     * leaked password stays useful for eight hours after it was replaced, which makes the reset
+     * theatre. The cost is that a user changing their own password has to sign in again on their
+     * other devices, which is also what they would expect.
+     */
     @Transactional
     public UserResponse changePassword(Long id, String rawPassword) {
         final var user = users.findById(id).orElseThrow(() -> new NotFoundException("User", id));
         user.changePasswordHash(tokens.hash(rawPassword));
+        user.revokeIssuedTokens();
         return toResponse(user);
+    }
+
+    /** Stops every token this account holds, without touching whether it may sign in again. */
+    @Transactional
+    public void signOutEverywhere(Long id) {
+        users.findById(id).orElseThrow(() -> new NotFoundException("User", id)).revokeIssuedTokens();
+    }
+
+    /**
+     * The caller signing themselves out of every device, the one they are holding included.
+     *
+     * <p>Here rather than only on the admin endpoint because the person who notices a phone is
+     * missing is the person who lost it, usually before anyone with an admin account is awake. They
+     * need a second device and their password, not a support call.
+     */
+    @Transactional
+    public void signOutCaller() {
+        final var username = currentUser.require().username();
+        users.findByUsername(username)
+                // Unreachable: the token that authenticated this request was only accepted because
+                // the account behind it exists. Not a client error if it ever happens.
+                .orElseThrow(
+                        () -> new ConflictException("The authenticated caller '%s' has no account".formatted(username)))
+                .revokeIssuedTokens();
     }
 
     /**

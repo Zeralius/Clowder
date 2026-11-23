@@ -1,8 +1,10 @@
 package dev.zeralius.clowder.security.api;
 
+import dev.zeralius.clowder.security.domain.AppUserService;
 import dev.zeralius.clowder.security.domain.TokenService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,9 +15,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final TokenService tokens;
+    private final AppUserService users;
 
-    AuthController(TokenService tokens) {
+    AuthController(TokenService tokens, AppUserService users) {
         this.tokens = tokens;
+        this.users = users;
     }
 
     /**
@@ -31,5 +35,18 @@ public class AuthController {
     @PostMapping("/token")
     TokenResponse token(@Valid @RequestBody TokenRequest request, HttpServletRequest http) {
         return tokens.issue(request, http.getRemoteAddr());
+    }
+
+    /**
+     * Signs the caller out of every device, including whichever one sent this.
+     *
+     * <p>Needs a token, so it is the one endpoint here that cannot be reached without already being
+     * signed in. It takes no body and no id: a request to sign somebody else out is an admin's, and
+     * lives on {@code /api/users/{id}/sign-out} where the filter chain can say so.
+     */
+    @PostMapping("/sign-out")
+    ResponseEntity<Void> signOut() {
+        users.signOutCaller();
+        return ResponseEntity.noContent().build();
     }
 }

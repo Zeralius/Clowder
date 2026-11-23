@@ -14,6 +14,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
@@ -34,6 +35,12 @@ import org.springframework.security.web.SecurityFilterChain;
  * <p><b>Why CSRF is disabled.</b> There is no cookie and no form: a browser cannot be tricked into
  * attaching a bearer token it does not hold. Disabling it on a session-based API would be a hole;
  * here leaving it on would only break every client for no benefit.
+ *
+ * <p><b>A stateless token that can still be revoked.</b> The decoder asks
+ * {@link TokenRevocationValidator} on every request whether the account behind a token is still
+ * active and whether the token predates a revocation. That is a database read per request, which is
+ * the price of a deactivated account losing access at once rather than in eight hours; see that
+ * class for why it is paid rather than cached.
  *
  * <p><b>The URL rules are coarse on purpose.</b> They say which role may reach which resource, and
  * nothing about ownership, because "a driver may only report against their own plans" is not a
@@ -119,11 +126,22 @@ class SecurityConfiguration {
         return new NimbusJwtEncoder(new ImmutableSecret<>(secretKey()));
     }
 
+    /**
+     * The decoder checks the signature, then the claims, and revocation is one of the claim checks.
+     *
+     * <p>{@code createDefaultWithValidators} rather than passing the revocation validator on its own:
+     * {@code setJwtValidator} <em>replaces</em> the validator the builder installed, so handing it one
+     * validator would quietly stop expiry being checked at all. That is a one-line mistake with no
+     * symptom until a token outlives its {@code exp}, which is why {@code AuthApiIT} asks an expired
+     * token for a depot and expects to be turned away.
+     */
     @Bean
-    JwtDecoder jwtDecoder() {
-        return NimbusJwtDecoder.withSecretKey(secretKey())
+    JwtDecoder jwtDecoder(TokenRevocationValidator revocation) {
+        final var decoder = NimbusJwtDecoder.withSecretKey(secretKey())
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
+        decoder.setJwtValidator(JwtValidators.createDefaultWithValidators(revocation));
+        return decoder;
     }
 
     /**

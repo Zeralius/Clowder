@@ -133,6 +133,26 @@ class AuthApiIT {
                 .isUnauthorized();
     }
 
+    /**
+     * An expired token is still refused, and this is not as obvious a test as it looks.
+     *
+     * <p>Revocation is checked by a validator handed to the decoder, and installing one
+     * <em>replaces</em> the validators the decoder came with. Get that wrong and expiry stops being
+     * checked at all, with no symptom until a token outlives its {@code exp} in production. This is
+     * the test that fails instead.
+     */
+    @Test
+    void anExpiredTokenIsUnauthorized() {
+        final var expired = tokens.expiredTokenFor("expired-admin", Role.ADMIN);
+
+        rest.get()
+                .uri("/api/depots")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + expired)
+                .exchange()
+                .expectStatus()
+                .isUnauthorized();
+    }
+
     @Test
     void theHealthEndpointNeedsNoToken() {
         rest.get().uri("/actuator/health").exchange().expectStatus().isOk();

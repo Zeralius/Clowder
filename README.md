@@ -89,7 +89,8 @@ by polling. The pool is small, bounded and CPU-sized; when its queue is full the
 | Method | Path | What it does | Who |
 | --- | --- | --- | --- |
 | `POST` | `/api/auth/token` | Username and password in, bearer token out. Rate limited | anyone |
-| `GET POST PUT DELETE` | `/api/users` | Account management. `DELETE` deactivates | admin |
+| `POST` | `/api/auth/sign-out` | Stops every token this caller holds, this one included | anyone signed in |
+| `GET POST PUT DELETE` | `/api/users` | Account management. `DELETE` deactivates, `POST /{id}/sign-out` stops that account's tokens | admin |
 | `GET POST PUT DELETE` | `/api/depots`, `/api/depots/{id}` | Depot CRUD. `DELETE` deactivates, `POST /{id}/reactivate` undoes it | admin writes, all read |
 | `GET POST PUT DELETE` | `/api/vehicles` | Vehicle CRUD. `DELETE` deactivates | admin writes, all read |
 | `GET POST PUT DELETE` | `/api/drivers` | Driver CRUD. `DELETE` deactivates | admin writes, all read |
@@ -157,6 +158,32 @@ general, which belongs at a reverse proxy rather than in the application. `X-For
 ignored, because trusting a client-supplied header would make the address budget free to bypass — one
 new value per request and every attempt looks like a new caller. Behind a proxy that overwrites it,
 set `server.forward-headers-strategy`.
+
+**The tokens are stateless and can still be revoked, which sounds like a contradiction and is
+mostly a matter of what gets stored.** Each account carries one timestamp: a token is accepted only
+if it was issued at or after it. Writing the current instant into that column therefore stops every
+token the account is holding, in one update, with nothing to expire and nothing to clean up. Three
+things write it — an admin calling `POST /api/users/{id}/sign-out` for a phone left in a cab, a
+caller signing themselves out of every device, and any password change, because a password replaced
+because it leaked must not leave the session it leaked into alive for another eight hours.
+Deactivating an account does it too, so that reactivating later does not bring the leaver's old
+token back with it.
+
+The alternative is a deny list of individual token ids, which can revoke one token out of several.
+It is not here, and the reason is that the operation this business has is "sign this account out
+everywhere": nobody knows which of a user's tokens a thief is holding. A list would cost a row per
+revocation and a job to delete the rows once the tokens they name had expired anyway, in exchange
+for a precision there is no way to use.
+
+What it does cost is one indexed read by username on every authenticated request, which also answers
+whether the account is still active — so a deactivated account loses access on its next call rather
+than when its token runs out. That read is paid rather than cached on purpose: a cache in front of
+it would turn the one property the feature exists for into an eventually-true one. If it ever shows
+up in a profile, the answer is a cache with a stated staleness bound written down here, not a quiet
+one. The check sits in the JWT validator beside the expiry check, because "has this been revoked?"
+is the same kind of question as "has this expired?" and the answer should come back the same way: a
+401 from the resource server, saying no more about which of the two it was than the token endpoint
+says about which half of a password was wrong.
 
 All errors come back as RFC 9457 problem documents, so you always get `type`, `title`, `status` and
 `detail`, plus a field-level `errors` list when validation fails. A 429 carries a `Retry-After`
@@ -453,6 +480,9 @@ solved on a worker, plans published as versioned artifacts with the publish rule
 database, the orders on them moved through their lifecycle by publishing and by what drivers report,
 driver events ingested idempotently, plan against reality read from a materialised projection of
 the event log, and every published version carrying the name of the account that published it.
+Access is a signed bearer token that can nevertheless be taken back: deactivating an account, or
+signing it out, stops the tokens it is already holding on their next request rather than when they
+expire.
 
 Not done yet, roughly in the order of how much they matter:
 
@@ -470,9 +500,21 @@ Not done yet, roughly in the order of how much they matter:
   cursor pagination is not implemented.
 - **The event log has no retention policy.** It only grows, and at some point a day that closed six
   months ago wants archiving rather than indexing.
-- **Tokens cannot be revoked before they expire.** They are stateless and signed, so deactivating an
-  account stops new tokens rather than existing ones, for up to the eight hour lifetime. Refresh
-  tokens and a deny list are the usual answer and neither is here.
+- **Revocation is per account, not per token.** Signing out stops every token the account holds,
+  because nothing records which token is which. Telling one device from another needs a token id in
+  the claims and a row per revocation, and the operation anyone actually asks for — a lost phone —
+  wants all of them anyway.
+- **Every authenticated request reads the account row.** That is what makes revocation and
+  deactivation immediate, and it is a read per request that a cache would make eventual. Fine at a
+  dispatcher console and a few dozen phones; at a different scale it wants a cache with a staleness
+  bound, or a short token lifetime and refresh tokens so that the read happens on refresh instead.
+- **There are no refresh tokens.** Eight hours is a compromise between a session that outlives a
+  revocation and a driver signing in during a shift. With refreshes the access token could live for
+  minutes and the question would barely matter.
+- **A token issued in the same second as a revocation is refused.** `iat` has one-second resolution,
+  so a token minted inside that second cannot prove it came after the cutoff and is treated as
+  though it did not. It costs whoever just signed themselves out one retried sign-in, and it is the
+  safe side of the only error this comparison can make.
 - **The login rate limit lives in memory, per instance.** Two instances mean two budgets and twice
   the allowance. Shared counters need shared state — Redis, a table, or doing it at the proxy — and
   an account guessed from many addresses at once is capped per address rather than in total.
