@@ -27,8 +27,7 @@ class BenchmarkCsvWriterTest {
         Locale.setDefault(Locale.GERMANY);
         var out = new StringWriter();
 
-        new BenchmarkCsvWriter()
-                .write(List.of(BenchmarkResult.of("R101", 20, 1750.5, 0, 19, 1650.80, 42)), out);
+        new BenchmarkCsvWriter().write(List.of(BenchmarkResult.of("R101", 20, 1750.5, 0, 19, 1650.80, 42)), out);
 
         var row = out.toString().lines().skip(1).findFirst().orElseThrow();
         assertThat(row).isEqualTo("R101,20,19,1750.50,1650.80,6.04,0,42");
@@ -40,11 +39,9 @@ class BenchmarkCsvWriterTest {
     void leavesUnknownReferencesBlank() {
         var out = new StringWriter();
 
-        new BenchmarkCsvWriter()
-                .write(List.of(BenchmarkResult.of("MINI", 2, 120.0, 1, 0, Double.NaN, 7)), out);
+        new BenchmarkCsvWriter().write(List.of(BenchmarkResult.of("MINI", 2, 120.0, 1, 0, Double.NaN, 7)), out);
 
-        assertThat(out.toString().lines().skip(1).findFirst().orElseThrow())
-                .isEqualTo("MINI,2,0,120.00,,,1,7");
+        assertThat(out.toString().lines().skip(1).findFirst().orElseThrow()).isEqualTo("MINI,2,0,120.00,,,1,7");
     }
 
     @Test

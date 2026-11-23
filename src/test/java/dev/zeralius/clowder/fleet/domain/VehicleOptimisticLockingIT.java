@@ -43,7 +43,13 @@ class VehicleOptimisticLockingIT {
     void theSecondOfTwoConcurrentEditsIsRejected() {
         var depotId = depots.findByCode("MRL").orElseThrow().getId();
         var id = vehicles.create(new CreateVehicleRequest(
-                        depotId, "MRL-LOCK-01", 1_000_000L, 1_000_000L, LocalTime.of(6, 0), 540, new BigDecimal("45.00")))
+                        depotId,
+                        "MRL-LOCK-01",
+                        1_000_000L,
+                        1_000_000L,
+                        LocalTime.of(6, 0),
+                        540,
+                        new BigDecimal("45.00")))
                 .id();
 
         // Two loads, two transactions, two detached instances at version 0.

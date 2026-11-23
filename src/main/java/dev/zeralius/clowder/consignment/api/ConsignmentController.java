@@ -30,7 +30,8 @@ public class ConsignmentController {
     @PostMapping
     ResponseEntity<ConsignmentResponse> create(@Valid @RequestBody CreateConsignmentRequest request) {
         var created = consignments.create(request);
-        return ResponseEntity.created(URI.create("/api/consignments/" + created.id())).body(created);
+        return ResponseEntity.created(URI.create("/api/consignments/" + created.id()))
+                .body(created);
     }
 
     @GetMapping("/{id}")

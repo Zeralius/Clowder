@@ -73,7 +73,8 @@ class RoutePlanSvgRendererTest {
         var polylines = parse(svg).getElementsByTagName("polyline");
 
         for (var i = 0; i < polylines.getLength(); i++) {
-            var points = ((Element) polylines.item(i)).getAttribute("points").trim().split(" ");
+            var points =
+                    ((Element) polylines.item(i)).getAttribute("points").trim().split(" ");
             assertThat(points[0]).as("polyline %d starts at the depot", i).isEqualTo(points[points.length - 1]);
             assertThat(points[0]).isEqualTo("40.0,760.0"); // the depot is the south-west corner of the data
         }

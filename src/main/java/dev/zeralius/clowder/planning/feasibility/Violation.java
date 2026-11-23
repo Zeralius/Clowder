@@ -16,8 +16,7 @@ public sealed interface Violation {
      *     RouteEvaluator#DEPOT_DEPARTURE} when the vehicle was already overloaded leaving the depot —
      *     which is the only possibility while the fleet does deliveries and no pickups
      */
-    record CapacityExceeded(CapacityKind kind, long limit, long required, int atStopIndex)
-            implements Violation {}
+    record CapacityExceeded(CapacityKind kind, long limit, long required, int atStopIndex) implements Violation {}
 
     /**
      * The vehicle could not begin service before the window closed.
@@ -28,8 +27,7 @@ public sealed interface Violation {
      *
      * @param arrivalMinutes when the vehicle actually arrived
      */
-    record TimeWindowMissed(long consignmentId, int arrivalMinutes, int windowEndMinutes)
-            implements Violation {}
+    record TimeWindowMissed(long consignmentId, int arrivalMinutes, int windowEndMinutes) implements Violation {}
 
     /** The last service finished after the shift ended — the driver was still working. */
     record ShiftOverrun(int routeEndMinutes, int shiftEndMinutes) implements Violation {}

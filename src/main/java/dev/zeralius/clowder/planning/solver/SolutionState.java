@@ -18,8 +18,7 @@ final class SolutionState {
     private final long[] distances;
     private final int[] unassigned;
 
-    private SolutionState(
-            ProblemInstance instance, List<VehicleSpec> vehicles, List<int[]> routes, int[] unassigned) {
+    private SolutionState(ProblemInstance instance, List<VehicleSpec> vehicles, List<int[]> routes, int[] unassigned) {
         this.instance = instance;
         this.vehicles = vehicles;
         this.routes = routes;

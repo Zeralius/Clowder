@@ -3,7 +3,6 @@ package dev.zeralius.clowder.planning.feasibility;
 import dev.zeralius.clowder.planning.model.ProblemInstance;
 import dev.zeralius.clowder.planning.model.VehicleSpec;
 import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Computes the schedule for an ordered route and reports every constraint violation.
@@ -108,8 +107,8 @@ public final class RouteEvaluator {
             }
 
             totalWait += wait;
-            schedule.add(new StopSchedule(
-                    position, arrival, serviceStart, wait, departure, cumulativeDistance, loadGrams));
+            schedule.add(
+                    new StopSchedule(position, arrival, serviceStart, wait, departure, cumulativeDistance, loadGrams));
             previousIndex = index;
         }
 

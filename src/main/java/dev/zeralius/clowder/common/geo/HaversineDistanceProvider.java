@@ -41,7 +41,8 @@ public final class HaversineDistanceProvider implements DistanceProvider {
         var lat1 = Math.toRadians(from.latitude().doubleValue());
         var lat2 = Math.toRadians(to.latitude().doubleValue());
         var deltaLat = lat2 - lat1;
-        var deltaLon = Math.toRadians(to.longitude().doubleValue() - from.longitude().doubleValue());
+        var deltaLon =
+                Math.toRadians(to.longitude().doubleValue() - from.longitude().doubleValue());
 
         var a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2)
                 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);

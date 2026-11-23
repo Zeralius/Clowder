@@ -4,7 +4,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 
-
 /**
  * A closed interval of absolute time, {@code [start, end]} — decision D2.
  *
@@ -24,6 +23,7 @@ public record TimeWindow(Instant start, Instant end) {
             throw new IllegalArgumentException("end must be after start: " + start + " .. " + end);
         }
     }
+
     public boolean contains(Instant instant) {
         return !instant.isBefore(start) && !instant.isAfter(end);
     }

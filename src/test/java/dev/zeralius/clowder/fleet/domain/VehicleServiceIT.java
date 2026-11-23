@@ -42,13 +42,7 @@ class VehicleServiceIT {
 
     private CreateVehicleRequest newVehicle(String registration) {
         return new CreateVehicleRequest(
-                depotId,
-                registration,
-                1_200_000L,
-                8_000_000L,
-                LocalTime.of(6, 0),
-                540,
-                new BigDecimal("45.00"));
+                depotId, registration, 1_200_000L, 8_000_000L, LocalTime.of(6, 0), 540, new BigDecimal("45.00"));
     }
 
     @Test
@@ -73,13 +67,7 @@ class VehicleServiceIT {
     @Test
     void rejectsAnUnknownDepotWithANotFound() {
         var orphan = new CreateVehicleRequest(
-                999_999L,
-                "MRL-AA-02",
-                1_200_000L,
-                8_000_000L,
-                LocalTime.of(6, 0),
-                540,
-                new BigDecimal("45.00"));
+                999_999L, "MRL-AA-02", 1_200_000L, 8_000_000L, LocalTime.of(6, 0), 540, new BigDecimal("45.00"));
 
         assertThatThrownBy(() -> vehicles.create(orphan))
                 .isInstanceOf(NotFoundException.class)
@@ -105,9 +93,7 @@ class VehicleServiceIT {
         var id = vehicles.create(newVehicle("MRL-AA-04")).id();
 
         var updated = vehicles.update(
-                id,
-                new UpdateVehicleRequest(
-                        900_000L, 6_000_000L, LocalTime.of(7, 30), 480, new BigDecimal("38.50")));
+                id, new UpdateVehicleRequest(900_000L, 6_000_000L, LocalTime.of(7, 30), 480, new BigDecimal("38.50")));
 
         assertThat(updated.capacityGrams()).isEqualTo(900_000L);
         assertThat(updated.capacityMillilitres()).isEqualTo(6_000_000L);

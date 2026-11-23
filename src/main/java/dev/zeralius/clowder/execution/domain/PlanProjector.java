@@ -26,8 +26,8 @@ public final class PlanProjector {
         final var states = new LinkedHashMap<Long, StopState>();
         planStops.stream()
                 .sorted(Comparator.comparingInt(PlanStopResponse::sequenceNo))
-                .forEach(stop -> states.put(
-                        stop.id(), StopState.pending(stop.id(), stop.consignmentId(), stop.reference())));
+                .forEach(stop ->
+                        states.put(stop.id(), StopState.pending(stop.id(), stop.consignmentId(), stop.reference())));
 
         Instant lastKnownDeparture = null;
         Long lastCompletedStopId = null;
@@ -56,9 +56,8 @@ public final class PlanProjector {
         }
 
         final var stops = new ArrayList<>(states.values());
-        final var completed = (int) stops.stream()
-                .filter(stop -> stop.status().isComplete())
-                .count();
+        final var completed =
+                (int) stops.stream().filter(stop -> stop.status().isComplete()).count();
 
         return new PlanProjection(
                 planId,
@@ -74,8 +73,8 @@ public final class PlanProjector {
         return switch (event.getEventType()) {
             case ARRIVED -> current.withStatus(StopStatus.ARRIVED, null).withArrival(event.getOccurredAt());
             case DELIVERED -> current.withStatus(StopStatus.DELIVERED, null).withDeparture(event.getOccurredAt());
-            case FAILED -> current.withStatus(StopStatus.FAILED, event.getFailureReason())
-                    .withDeparture(event.getOccurredAt());
+            case FAILED ->
+                current.withStatus(StopStatus.FAILED, event.getFailureReason()).withDeparture(event.getOccurredAt());
             case DEPARTED -> current.withDeparture(event.getOccurredAt());
             case DEPARTED_DEPOT, RETURNED_DEPOT -> current;
         };
@@ -100,7 +99,8 @@ public final class PlanProjector {
         return planStops.stream()
                 .filter(stop -> stopId.equals(stop.id()))
                 .findFirst()
-                .map(stop -> (int) Duration.between(stop.plannedDeparture(), actualDeparture).toMinutes())
+                .map(stop -> (int) Duration.between(stop.plannedDeparture(), actualDeparture)
+                        .toMinutes())
                 .orElse(0);
     }
 }

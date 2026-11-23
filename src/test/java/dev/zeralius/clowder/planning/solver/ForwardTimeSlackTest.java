@@ -34,7 +34,8 @@ class ForwardTimeSlackTest {
         final var instance = TestInstances.line();
         final var route = new int[] {0, 1, 2};
 
-        final var slack = ForwardTimeSlack.compute(route, route.length, instance.vehicles().get(0), instance);
+        final var slack = ForwardTimeSlack.compute(
+                route, route.length, instance.vehicles().get(0), instance);
 
         assertThat(slack).containsExactly(90, 110, 120);
         assertExactBoundaryAtEveryPosition(instance, route);
@@ -53,7 +54,8 @@ class ForwardTimeSlackTest {
         final var instance = tightTail();
         final var route = new int[] {0, 1, 2};
 
-        final var slack = ForwardTimeSlack.compute(route, route.length, instance.vehicles().get(0), instance);
+        final var slack = ForwardTimeSlack.compute(
+                route, route.length, instance.vehicles().get(0), instance);
 
         assertThat(slack).containsExactly(30, 10, 10);
         assertExactBoundaryAtEveryPosition(instance, route);
@@ -63,7 +65,8 @@ class ForwardTimeSlackTest {
     void anEmptyRouteHasNoSlackEntries() {
         final var instance = TestInstances.line();
 
-        assertThat(ForwardTimeSlack.compute(new int[0], 0, instance.vehicles().get(0), instance)).isEmpty();
+        assertThat(ForwardTimeSlack.compute(new int[0], 0, instance.vehicles().get(0), instance))
+                .isEmpty();
     }
 
     /** Randomised: the exact-boundary property must hold on every feasible route, at every position. */
@@ -140,7 +143,9 @@ class ForwardTimeSlackTest {
         final var slack = ForwardTimeSlack.compute(route, route.length, vehicle, instance);
 
         for (var position = 0; position < route.length; position++) {
-            assertThat(slack[position]).as("slack[%d] on a feasible route", position).isGreaterThanOrEqualTo(0);
+            assertThat(slack[position])
+                    .as("slack[%d] on a feasible route", position)
+                    .isGreaterThanOrEqualTo(0);
 
             assertThat(withDelay(instance, route, position, slack[position]))
                     .as("delay of exactly slack[%d]=%d must stay feasible", position, slack[position])

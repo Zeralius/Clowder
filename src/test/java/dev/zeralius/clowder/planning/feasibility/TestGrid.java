@@ -28,8 +28,8 @@ final class TestGrid {
 
     private static final long MINOR_UNITS = 1_000_000L;
 
-    static final DistanceMatrix LINE = DistanceMatrix.from(
-            List.of(point(0), point(10), point(30), point(60)), new EuclideanDistanceProvider());
+    static final DistanceMatrix LINE =
+            DistanceMatrix.from(List.of(point(0), point(10), point(30), point(60)), new EuclideanDistanceProvider());
 
     private TestGrid() {}
 

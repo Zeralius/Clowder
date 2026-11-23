@@ -1,5 +1,7 @@
 package dev.zeralius.clowder.common.error;
 
+import java.net.URI;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -11,9 +13,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
-import java.net.URI;
-import java.util.Map;
-
 /**
  * Every error path in the application returns the same RFC 9457 envelope, including bean-validation
  * failures.
@@ -21,7 +20,6 @@ import java.util.Map;
  * <p>There is deliberately no {@code IllegalArgumentException} handler: mapping it to 400 turns
  * programming errors into innocuous-looking client errors and you stop seeing them.
  */
-
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
@@ -50,7 +48,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(OptimisticLockingFailureException.class)
     ProblemDetail handleStaleWrite(OptimisticLockingFailureException ex) {
         log.debug("Optimistic locking failure", ex);
-        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "This record was modified by someone else. Reload and retry");
+        var problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, "This record was modified by someone else. Reload and retry");
         problem.setTitle("Concurrent modification");
         problem.setType(CONFLICT_TYPE);
         return problem;
@@ -60,7 +59,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      * The lost race against a pre-check such as {@code existsByRegistration}, and every other
      * constraint. Detail is logged, not returned: constraint names describe the schema.
      */
-
     @ExceptionHandler(DataIntegrityViolationException.class)
     ProblemDetail handleDataIntegrityViolation(DataIntegrityViolationException ex) {
         log.warn("Data integrity violation", ex);
@@ -73,9 +71,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
-            MethodArgumentNotValidException ex, HttpHeaders headers,
-            HttpStatusCode status,
-            WebRequest request) {
+            MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
 
         var problem = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
         problem.setTitle("Validation failed");
@@ -84,13 +80,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setProperty(
                 "errors",
                 ex.getBindingResult().getFieldErrors().stream()
-                        .map (fe -> Map.of(
-                                "field", fe.getField(),
-                                "message", fe.getDefaultMessage() == null ? "invalid" : fe.getDefaultMessage()))
+                        .map(fe -> Map.of(
+                                "field",
+                                fe.getField(),
+                                "message",
+                                fe.getDefaultMessage() == null ? "invalid" : fe.getDefaultMessage()))
                         .toList());
 
         return ResponseEntity.badRequest().body(problem);
     }
-
-
 }

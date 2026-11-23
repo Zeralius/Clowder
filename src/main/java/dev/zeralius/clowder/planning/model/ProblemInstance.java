@@ -11,8 +11,7 @@ import java.util.List;
  *
  * @param depotIndex the matrix row shared by every vehicle's depot in a single-depot instance
  */
-public record ProblemInstance(
-        List<VehicleSpec> vehicles, List<StopSpec> stops, DistanceMatrix matrix, int depotIndex) {
+public record ProblemInstance(List<VehicleSpec> vehicles, List<StopSpec> stops, DistanceMatrix matrix, int depotIndex) {
 
     public ProblemInstance {
         vehicles = List.copyOf(vehicles);

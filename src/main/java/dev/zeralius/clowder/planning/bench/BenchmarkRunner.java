@@ -38,8 +38,7 @@ public final class BenchmarkRunner {
             final var minorUnits = (double) instance.matrix().minorUnitsPerUnit();
             final var distance = result.solution().totalDistance() / minorUnits;
 
-            final var reference =
-                    bestKnown.find(name).orElse(new BestKnownRegistry.BestKnown(name, 0, Double.NaN));
+            final var reference = bestKnown.find(name).orElse(new BestKnownRegistry.BestKnown(name, 0, Double.NaN));
 
             results.add(BenchmarkResult.of(
                     name,

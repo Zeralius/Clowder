@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Locale;
-import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -33,8 +32,7 @@ public final class BenchmarkMain {
 
     public static void main(String[] args) throws IOException {
         if (args.length < 4) {
-            System.err.println(
-                    "usage: BenchmarkMain <instanceDir> <bestKnownCsv> <resultsCsv> <budgetSeconds>");
+            System.err.println("usage: BenchmarkMain <instanceDir> <bestKnownCsv> <resultsCsv> <budgetSeconds>");
             System.exit(2);
         }
 
@@ -71,13 +69,13 @@ public final class BenchmarkMain {
             System.exit(1);
         }
 
-        final var missing = names.stream().filter(n -> registry.find(n).isEmpty()).toList();
+        final var missing =
+                names.stream().filter(n -> registry.find(n).isEmpty()).toList();
         if (!missing.isEmpty()) {
             System.err.printf("warning: no best-known value for %d instance(s): %s%n", missing.size(), missing);
         }
 
-        System.out.printf(
-                Locale.ROOT, "Solving %d instance(s) with a %s budget each%n", names.size(), budget);
+        System.out.printf(Locale.ROOT, "Solving %d instance(s) with a %s budget each%n", names.size(), budget);
 
         final var config = SolverConfig.defaults().withBudget(budget);
         final var results = new BenchmarkRunner(new HeuristicSolver(), registry).run(names, byName::get, config);
@@ -98,12 +96,24 @@ public final class BenchmarkMain {
 
     private static void summarise(
             java.util.List<BenchmarkResult> results, BestKnownRegistry registry, Path resultsCsv) {
-        final var scored = results.stream().filter(r -> !Double.isNaN(r.gapPercent())).toList();
+        final var scored =
+                results.stream().filter(r -> !Double.isNaN(r.gapPercent())).toList();
 
-        System.out.printf(Locale.ROOT, "%-8s %4s %4s %10s %10s %8s %6s %7s%n",
-                "instance", "veh", "best", "distance", "best", "gap%", "unas", "ms");
+        System.out.printf(
+                Locale.ROOT,
+                "%-8s %4s %4s %10s %10s %8s %6s %7s%n",
+                "instance",
+                "veh",
+                "best",
+                "distance",
+                "best",
+                "gap%",
+                "unas",
+                "ms");
         for (var r : results) {
-            System.out.printf(Locale.ROOT, "%-8s %4d %4s %10.2f %10s %8s %6d %7d%n",
+            System.out.printf(
+                    Locale.ROOT,
+                    "%-8s %4d %4s %10.2f %10s %8s %6d %7d%n",
                     r.instance(),
                     r.vehicles(),
                     r.bestVehicles() > 0 ? String.valueOf(r.bestVehicles()) : "-",
@@ -115,14 +125,24 @@ public final class BenchmarkMain {
         }
 
         if (!scored.isEmpty()) {
-            final var meanGap = scored.stream().mapToDouble(BenchmarkResult::gapPercent).average().orElse(Double.NaN);
-            final var excess = scored.stream().mapToInt(BenchmarkResult::excessVehicles).sum();
-            final var unassigned = results.stream().mapToInt(BenchmarkResult::unassigned).sum();
+            final var meanGap = scored.stream()
+                    .mapToDouble(BenchmarkResult::gapPercent)
+                    .average()
+                    .orElse(Double.NaN);
+            final var excess =
+                    scored.stream().mapToInt(BenchmarkResult::excessVehicles).sum();
+            final var unassigned =
+                    results.stream().mapToInt(BenchmarkResult::unassigned).sum();
             System.out.printf(
                     Locale.ROOT,
                     "%n%d of %d instances scored against %d known references.%n"
                             + "mean distance gap %.2f%%, %d vehicle(s) over best-known in total, %d consignment(s) unrouted.%n",
-                    scored.size(), results.size(), registry.size(), meanGap, excess, unassigned);
+                    scored.size(),
+                    results.size(),
+                    registry.size(),
+                    meanGap,
+                    excess,
+                    unassigned);
         }
         System.out.println("wrote " + resultsCsv.toAbsolutePath());
     }

@@ -90,12 +90,10 @@ class SolomonImportIT {
     void everyVehicleGetsTheHorizonAsItsShift() {
         var result = importer.importFrom(fixture(), SERVICE_DATE);
 
-        assertThat(fleet.findActiveVehiclesAt(result.depotId()))
-                .hasSize(3)
-                .allSatisfy(v -> {
-                    assertThat(v.shiftMinutes()).isEqualTo(230);
-                    assertThat(v.capacityGrams()).isEqualTo(200L);
-                });
+        assertThat(fleet.findActiveVehiclesAt(result.depotId())).hasSize(3).allSatisfy(v -> {
+            assertThat(v.shiftMinutes()).isEqualTo(230);
+            assertThat(v.capacityGrams()).isEqualTo(200L);
+        });
     }
 
     @Test
@@ -133,7 +131,9 @@ class SolomonImportIT {
         var first = importer.importFrom(fixture(), SERVICE_DATE);
 
         // Same depot code, so findOrCreateDepot returns the existing row rather than conflicting.
-        assertThat(fleet.findAllDepots()).filteredOn(d -> d.code().equals("MINI")).hasSize(1);
+        assertThat(fleet.findAllDepots())
+                .filteredOn(d -> d.code().equals("MINI"))
+                .hasSize(1);
         assertThat(first.depotCode()).isEqualTo("MINI");
     }
 }

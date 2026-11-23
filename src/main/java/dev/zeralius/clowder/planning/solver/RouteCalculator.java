@@ -116,8 +116,7 @@ final class RouteCalculator {
      * Service start at each position, written into {@code out}. Used by the I1 cost function, which
      * needs to know how much a candidate insertion delays the stop after it.
      */
-    static void serviceStarts(
-            int[] route, int length, VehicleSpec vehicle, ProblemInstance instance, int[] out) {
+    static void serviceStarts(int[] route, int length, VehicleSpec vehicle, ProblemInstance instance, int[] out) {
         final var stops = instance.stops();
         final var matrix = instance.matrix();
 

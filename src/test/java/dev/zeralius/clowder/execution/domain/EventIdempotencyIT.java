@@ -89,14 +89,13 @@ class EventIdempotencyIT {
 
     @Test
     void anEventAgainstAnUnknownPlanIsNotFound() {
-        assertThatThrownBy(() -> ingestion.record(999_999L, departure("key-1")))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> ingestion.record(999_999L, departure("key-1"))).isInstanceOf(NotFoundException.class);
     }
 
     @Test
     void aStopScopedEventNeedsAStopThatIsOnThePlan() {
-        final var request = new RecordEventRequest(
-                "key-1", 999_999L, DriverEventType.DELIVERED, OCCURRED, null, null, null);
+        final var request =
+                new RecordEventRequest("key-1", 999_999L, DriverEventType.DELIVERED, OCCURRED, null, null, null);
 
         assertThatThrownBy(() -> ingestion.record(plan.id(), request))
                 .isInstanceOf(ConflictException.class)
@@ -105,8 +104,7 @@ class EventIdempotencyIT {
 
     @Test
     void aStopScopedEventWithoutAStopIsAConflict() {
-        final var request =
-                new RecordEventRequest("key-1", null, DriverEventType.ARRIVED, OCCURRED, null, null, null);
+        final var request = new RecordEventRequest("key-1", null, DriverEventType.ARRIVED, OCCURRED, null, null, null);
 
         assertThatThrownBy(() -> ingestion.record(plan.id(), request)).isInstanceOf(ConflictException.class);
     }
@@ -122,10 +120,10 @@ class EventIdempotencyIT {
 
     /** Append-only: a stop-scoped event keeps its stop, and nothing in the log is ever updated. */
     @Test
-    void aStopScopedEventIsStoredAgainstItsStop()  {
+    void aStopScopedEventIsStoredAgainstItsStop() {
         final var stopId = plan.stops().getFirst().id();
-        final var request = new RecordEventRequest(
-                "key-1", stopId, DriverEventType.DELIVERED, OCCURRED, null, null, null);
+        final var request =
+                new RecordEventRequest("key-1", stopId, DriverEventType.DELIVERED, OCCURRED, null, null, null);
 
         final var recorded = ingestion.record(plan.id(), request);
 

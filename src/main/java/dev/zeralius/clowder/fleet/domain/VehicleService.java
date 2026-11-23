@@ -8,11 +8,10 @@ import dev.zeralius.clowder.fleet.api.UpdateVehicleRequest;
 import dev.zeralius.clowder.fleet.api.VehicleResponse;
 import dev.zeralius.clowder.fleet.persistence.DepotRepository;
 import dev.zeralius.clowder.fleet.persistence.VehicleRepository;
+import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 @Transactional(readOnly = true)
@@ -36,13 +35,12 @@ public class VehicleService {
         return PageResponse.from(vehicles.findAll(pageable), VehicleMapper::toResponse);
     }
 
-
     /**
      * Backs the cross-module facade. A missing depot is a 404 rather than an empty list: asking for
      * the vehicles at depot 9999 is a different mistake from a depot that happens to have none.
      */
     public List<VehicleResponse> findActiveVehiclesAt(Long depotId) {
-        if(!depots.existsById(depotId)) {
+        if (!depots.existsById(depotId)) {
             throw new NotFoundException("Depot", depotId);
         }
         return vehicles.findByDepotIdAndActiveTrue(depotId).stream()
@@ -52,10 +50,12 @@ public class VehicleService {
 
     @Transactional
     public VehicleResponse create(CreateVehicleRequest request) {
-        if(vehicles.existsByRegistration(request.registration())) {
-            throw new ConflictException("A vehicle with registration '%s' already exists".formatted(request.registration()));
+        if (vehicles.existsByRegistration(request.registration())) {
+            throw new ConflictException(
+                    "A vehicle with registration '%s' already exists".formatted(request.registration()));
         }
-        var depot = depots.findById(request.depotId()).orElseThrow(() -> new NotFoundException("Depot", request.depotId()));
+        var depot =
+                depots.findById(request.depotId()).orElseThrow(() -> new NotFoundException("Depot", request.depotId()));
 
         var vehicle = new Vehicle(
                 depot,
@@ -71,8 +71,7 @@ public class VehicleService {
 
     @Transactional
     public VehicleResponse update(Long id, UpdateVehicleRequest request) {
-        var vehicle = vehicles.findByIdWithDepot(id)
-                .orElseThrow(() -> new NotFoundException("Vehicle", id));
+        var vehicle = vehicles.findByIdWithDepot(id).orElseThrow(() -> new NotFoundException("Vehicle", id));
 
         vehicle.updateCapacity(request.capacityGrams(), request.capacityMillilitres());
         vehicle.updateShift(request.shiftStart(), request.shiftMinutes());
@@ -87,6 +86,4 @@ public class VehicleService {
                 .orElseThrow(() -> new NotFoundException("Vehicle", id))
                 .deactivate();
     }
-
-
 }

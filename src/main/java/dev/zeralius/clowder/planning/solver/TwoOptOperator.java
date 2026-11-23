@@ -43,8 +43,10 @@ final class TwoOptOperator implements LocalSearchOperator {
                     final var c = stops.get(route[j]).index();
                     final var d = j == n - 1 ? depot : stops.get(route[j + 1]).index();
 
-                    final var delta = matrix.distance(a, c) + matrix.distance(b, d)
-                            - matrix.distance(a, b) - matrix.distance(c, d);
+                    final var delta = matrix.distance(a, c)
+                            + matrix.distance(b, d)
+                            - matrix.distance(a, b)
+                            - matrix.distance(c, d);
 
                     if (delta >= 0) {
                         continue;

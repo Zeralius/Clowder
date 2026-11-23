@@ -50,8 +50,7 @@ final class RelocateOperator implements LocalSearchOperator {
                     }
 
                     for (var insertAt = 0; insertAt <= target.length; insertAt++) {
-                        final var lengthened =
-                                RouteCalculator.withInsertion(target, target.length, insertAt, moved);
+                        final var lengthened = RouteCalculator.withInsertion(target, target.length, insertAt, moved);
 
                         final var targetDelta = state.distanceOf(to, lengthened) - state.distance(to);
                         final var totalDelta = sourceDelta + targetDelta;

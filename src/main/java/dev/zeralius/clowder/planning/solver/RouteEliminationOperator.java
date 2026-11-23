@@ -48,7 +48,8 @@ final class RouteEliminationOperator implements LocalSearchOperator {
                 candidates.add(v);
             }
         }
-        candidates.sort(Comparator.<Integer>comparingInt(v -> state.route(v).length).thenComparingInt(v -> v));
+        candidates.sort(
+                Comparator.<Integer>comparingInt(v -> state.route(v).length).thenComparingInt(v -> v));
         return candidates;
     }
 
@@ -105,8 +106,7 @@ final class RouteEliminationOperator implements LocalSearchOperator {
             return false;
         }
 
-        working[bestRoute] =
-                RouteCalculator.withInsertion(working[bestRoute], working[bestRoute].length, bestAt, stop);
+        working[bestRoute] = RouteCalculator.withInsertion(working[bestRoute], working[bestRoute].length, bestAt, stop);
         touched[bestRoute] = true;
         return true;
     }

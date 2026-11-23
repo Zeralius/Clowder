@@ -104,8 +104,7 @@ class LocalSearchOperatorTest {
                 return 1L;
             }
         };
-        var matrix = DistanceMatrix.from(
-                List.of(LatLon.of(0d, 0d), LatLon.of(0d, 1d), LatLon.of(0d, 2d)), nonMetric);
+        var matrix = DistanceMatrix.from(List.of(LatLon.of(0d, 0d), LatLon.of(0d, 1d), LatLon.of(0d, 2d)), nonMetric);
         var instance = new ProblemInstance(
                 List.of(new VehicleSpec(1L, 100L, 100L, 0, 1000, 0), new VehicleSpec(2L, 100L, 100L, 0, 1000, 0)),
                 List.of(new StopSpec(1L, 1, 0L, 0L, 0, 0, 1000), new StopSpec(2L, 2, 0L, 0L, 0, 0, 1000)),
@@ -119,10 +118,13 @@ class LocalSearchOperatorTest {
         assertThat(state.toSolution().vehicleCount()).isEqualTo(1);
         assertThat(state.totalDistance()).isEqualTo(102L);
 
-        assertThat(relocate.improve(state)).as("the reverse move must not be taken").isFalse();
+        assertThat(relocate.improve(state))
+                .as("the reverse move must not be taken")
+                .isFalse();
 
         var outcome = new LocalSearchOptimiser(instance, SolverConfig.defaults())
-                .optimise(solution(instance, new int[] {0}, new int[] {1}), Deadline.startingNow(Duration.ofSeconds(5)));
+                .optimise(
+                        solution(instance, new int[] {0}, new int[] {1}), Deadline.startingNow(Duration.ofSeconds(5)));
         assertThat(outcome.iterations()).isLessThan(5);
         assertThat(outcome.solution().vehicleCount()).isEqualTo(1);
     }

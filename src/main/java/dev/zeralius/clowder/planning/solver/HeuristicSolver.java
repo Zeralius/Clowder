@@ -52,23 +52,20 @@ public final class HeuristicSolver implements Solver {
             final var vehicle = byId.stream()
                     .filter(v -> v.id() == route.vehicleId())
                     .findFirst()
-                    .orElseThrow(() -> new IllegalStateException("Route references unknown vehicle " + route.vehicleId()));
+                    .orElseThrow(
+                            () -> new IllegalStateException("Route references unknown vehicle " + route.vehicleId()));
 
             final var evaluation = evaluator.evaluate(vehicle, route.stopPositions(), instance);
             if (!evaluation.feasible()) {
-                throw new IllegalStateException(
-                        "Solver returned an infeasible route for vehicle %d: %s"
-                                .formatted(route.vehicleId(), evaluation.violations()));
+                throw new IllegalStateException("Solver returned an infeasible route for vehicle %d: %s"
+                        .formatted(route.vehicleId(), evaluation.violations()));
             }
         }
 
-        final var routed = solution.routes().stream()
-                .mapToInt(Route::stopCount)
-                .sum();
+        final var routed = solution.routes().stream().mapToInt(Route::stopCount).sum();
         if (routed + solution.unassigned().length != instance.stopCount()) {
-            throw new IllegalStateException(
-                    "Solver lost or duplicated stops: %d routed + %d unassigned != %d total"
-                            .formatted(routed, solution.unassigned().length, instance.stopCount()));
+            throw new IllegalStateException("Solver lost or duplicated stops: %d routed + %d unassigned != %d total"
+                    .formatted(routed, solution.unassigned().length, instance.stopCount()));
         }
 
         final var seen = new boolean[instance.stopCount()];

@@ -20,9 +20,7 @@ class PlanStatusTest {
     void everyPairIsExactlyAsTheTableSays(PlanStatus from) {
         for (final var to : PlanStatus.values()) {
             final var legal = LEGAL.contains(from + "->" + to);
-            assertThat(from.canTransitionTo(to))
-                    .as("%s to %s", from, to)
-                    .isEqualTo(legal);
+            assertThat(from.canTransitionTo(to)).as("%s to %s", from, to).isEqualTo(legal);
         }
     }
 

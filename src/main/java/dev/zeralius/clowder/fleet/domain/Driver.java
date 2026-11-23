@@ -14,8 +14,6 @@ import java.time.Instant;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
-import java.time.Instant;
-
 @Entity
 @Table(name = "driver")
 public class Driver {

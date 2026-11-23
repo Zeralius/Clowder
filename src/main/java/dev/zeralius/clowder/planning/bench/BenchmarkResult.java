@@ -27,8 +27,7 @@ public record BenchmarkResult(
         final var gap = bestDistance <= 0 || Double.isNaN(bestDistance)
                 ? Double.NaN
                 : (distance - bestDistance) / bestDistance * 100d;
-        return new BenchmarkResult(
-                instance, vehicles, bestVehicles, distance, bestDistance, gap, unassigned, millis);
+        return new BenchmarkResult(instance, vehicles, bestVehicles, distance, bestDistance, gap, unassigned, millis);
     }
 
     /** Extra vehicles over best-known. The first term of the objective, so it ranks above the gap. */

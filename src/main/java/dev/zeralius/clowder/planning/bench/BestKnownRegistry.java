@@ -42,9 +42,7 @@ public final class BestKnownRegistry {
                 byInstance.put(
                         key(instance),
                         new BestKnown(
-                                instance,
-                                Integer.parseInt(fields[1].trim()),
-                                Double.parseDouble(fields[2].trim())));
+                                instance, Integer.parseInt(fields[1].trim()), Double.parseDouble(fields[2].trim())));
             }
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read best-known values", e);

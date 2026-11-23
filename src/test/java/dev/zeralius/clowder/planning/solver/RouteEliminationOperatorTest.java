@@ -145,8 +145,7 @@ class RouteEliminationOperatorTest {
 
         assertThat(outcome.solution().vehicleCount()).isEqualTo(1);
         assertThat(outcome.solution().isComplete()).isTrue();
-        assertThat(allStops(SolutionState.of(outcome.solution(), instance)))
-                .containsExactlyInAnyOrder(0, 1, 2, 3);
+        assertThat(allStops(SolutionState.of(outcome.solution(), instance))).containsExactlyInAnyOrder(0, 1, 2, 3);
     }
 
     // ---- structure ----
@@ -154,8 +153,8 @@ class RouteEliminationOperatorTest {
     @Test
     void emptiesARouteByDistributingAllOfItsStops() {
         var instance = metric(3, 1_000L);
-        var state = SolutionState.of(
-                solution(instance, new int[] {0, 1, 2}, new int[] {3, 4}, new int[] {5}), instance);
+        var state =
+                SolutionState.of(solution(instance, new int[] {0, 1, 2}, new int[] {3, 4}, new int[] {5}), instance);
 
         assertThat(new RouteEliminationOperator().improve(state)).isTrue();
 
@@ -168,8 +167,7 @@ class RouteEliminationOperatorTest {
     @Test
     void changesNothingWhenOneStopCannotBePlaced() {
         var instance = metric(2, 35L);
-        var state = SolutionState.of(
-                solution(instance, new int[] {0, 1, 2}, new int[] {3, 4, 5}), instance);
+        var state = SolutionState.of(solution(instance, new int[] {0, 1, 2}, new int[] {3, 4, 5}), instance);
         var before = snapshot(state);
 
         assertThat(new RouteEliminationOperator().improve(state)).isFalse();
@@ -183,8 +181,7 @@ class RouteEliminationOperatorTest {
     void neverMovesStopsIntoAnEmptyRoute() {
         var instance = metric(4, 1_000L);
         var state = SolutionState.of(
-                solution(instance, new int[] {0, 1, 2}, new int[] {3, 4, 5}, new int[0], new int[0]),
-                instance);
+                solution(instance, new int[] {0, 1, 2}, new int[] {3, 4, 5}, new int[0], new int[0]), instance);
 
         new RouteEliminationOperator().improve(state);
 

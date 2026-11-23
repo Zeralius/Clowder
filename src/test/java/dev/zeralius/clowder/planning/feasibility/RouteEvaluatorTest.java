@@ -65,9 +65,7 @@ class RouteEvaluatorTest {
         @Test
         void accumulatesDistanceAlongTheRouteAndBack() {
             var result = evaluator.evaluate(
-                    vehicle(),
-                    route(0, 1, 2),
-                    instance(stop(1, 0, 1000, 0), stop(2, 0, 1000, 0), stop(3, 0, 1000, 0)));
+                    vehicle(), route(0, 1, 2), instance(stop(1, 0, 1000, 0), stop(2, 0, 1000, 0), stop(3, 0, 1000, 0)));
 
             assertThat(result.schedule())
                     .extracting(StopSchedule::cumulativeDistance)
@@ -78,8 +76,7 @@ class RouteEvaluatorTest {
         /** Visit order comes from the route array, not from the order stops were declared. */
         @Test
         void visitsStopsInRouteOrderNotDeclarationOrder() {
-            var result = evaluator.evaluate(
-                    vehicle(), route(1, 0), instance(stop(1, 0, 1000, 0), stop(3, 0, 1000, 0)));
+            var result = evaluator.evaluate(vehicle(), route(1, 0), instance(stop(1, 0, 1000, 0), stop(3, 0, 1000, 0)));
 
             assertThat(result.schedule()).extracting(StopSchedule::stopIndex).containsExactly(1, 0);
             // depot to 3 is 60, 3 to 1 is 50, 1 back to depot is 10.
@@ -116,9 +113,7 @@ class RouteEvaluatorTest {
                     instance(stop(1, 60, 1000, 0), stop(2, 150, 1000, 0), stop(3, 250, 1000, 0)));
 
             assertThat(result.feasible()).isTrue();
-            assertThat(result.schedule())
-                    .extracting(StopSchedule::waitMinutes)
-                    .containsExactly(50, 70, 70);
+            assertThat(result.schedule()).extracting(StopSchedule::waitMinutes).containsExactly(50, 70, 70);
             assertThat(result.totalWaitMinutes()).isEqualTo(190);
             assertThat(result.totalDurationMinutes()).isEqualTo(310);
         }
@@ -161,9 +156,7 @@ class RouteEvaluatorTest {
         @Test
         void reportsEveryDownstreamStopNotJustTheFirst() {
             var result = evaluator.evaluate(
-                    vehicle(),
-                    route(0, 1, 2),
-                    instance(stop(1, 0, 1000, 200), stop(2, 0, 100, 0), stop(3, 0, 100, 0)));
+                    vehicle(), route(0, 1, 2), instance(stop(1, 0, 1000, 200), stop(2, 0, 100, 0), stop(3, 0, 100, 0)));
 
             assertThat(result.violationsOfType(Violation.TimeWindowMissed.class))
                     .containsExactly(
@@ -211,9 +204,7 @@ class RouteEvaluatorTest {
                             stop(3, 0, 1000, 0, 300L, 0L)));
 
             assertThat(result.peakLoadGrams()).isEqualTo(600L);
-            assertThat(result.schedule())
-                    .extracting(StopSchedule::loadAfter)
-                    .containsExactly(500L, 300L, 0L);
+            assertThat(result.schedule()).extracting(StopSchedule::loadAfter).containsExactly(500L, 300L, 0L);
         }
 
         @Test
@@ -238,8 +229,7 @@ class RouteEvaluatorTest {
         void reportsALateDepotReturnWithoutAShiftOverrun() {
             var result = evaluator.evaluate(vehicle(100), route(0), instance(stop(3, 0, 1000, 15)));
 
-            assertThat(result.violations())
-                    .containsExactly(new Violation.DepotReturnMissed(135, 100));
+            assertThat(result.violations()).containsExactly(new Violation.DepotReturnMissed(135, 100));
         }
 
         /** A longer service overruns the shift as well as the return. */
@@ -248,8 +238,7 @@ class RouteEvaluatorTest {
             var result = evaluator.evaluate(vehicle(100), route(0), instance(stop(3, 0, 1000, 60)));
 
             assertThat(result.violations())
-                    .containsExactly(
-                            new Violation.ShiftOverrun(120, 100), new Violation.DepotReturnMissed(180, 100));
+                    .containsExactly(new Violation.ShiftOverrun(120, 100), new Violation.DepotReturnMissed(180, 100));
         }
 
         @Test

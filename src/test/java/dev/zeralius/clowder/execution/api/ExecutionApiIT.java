@@ -203,7 +203,8 @@ class ExecutionApiIT {
         final var stopId = plan.stops().getFirst().id();
 
         post(request("later", stopId, DriverEventType.DELIVERED, plannedDeparture(0)));
-        post(request("earlier", stopId, DriverEventType.ARRIVED, plannedDeparture(0).minus(Duration.ofMinutes(8))));
+        post(request(
+                "earlier", stopId, DriverEventType.ARRIVED, plannedDeparture(0).minus(Duration.ofMinutes(8))));
 
         final var first = tracking().stops().getFirst();
 

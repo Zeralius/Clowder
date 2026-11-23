@@ -52,6 +52,7 @@ public record Route(long vehicleId, int[] stopPositions, long distance, int dura
 
     @Override
     public String toString() {
-        return "Route[vehicle=%d, stops=%s, distance=%d]".formatted(vehicleId, Arrays.toString(stopPositions), distance);
+        return "Route[vehicle=%d, stops=%s, distance=%d]"
+                .formatted(vehicleId, Arrays.toString(stopPositions), distance);
     }
 }

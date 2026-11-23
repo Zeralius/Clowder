@@ -73,9 +73,7 @@ public class PlanRun {
     private Instant finishedAt;
 
     @ElementCollection(fetch = FetchType.LAZY)
-    @CollectionTable(
-            name = "plan_run_unassigned",
-            joinColumns = @JoinColumn(name = "plan_run_id", nullable = false))
+    @CollectionTable(name = "plan_run_unassigned", joinColumns = @JoinColumn(name = "plan_run_id", nullable = false))
     private List<UnassignedConsignment> unassigned = new ArrayList<>();
 
     /** For JPA. */

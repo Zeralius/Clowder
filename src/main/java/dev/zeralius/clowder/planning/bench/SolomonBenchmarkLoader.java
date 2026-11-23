@@ -48,8 +48,7 @@ public final class SolomonBenchmarkLoader {
         // Volume is inactive for these instances (decision D4), so capacity is effectively unbounded.
         final var vehicles = new ArrayList<VehicleSpec>(instance.vehicleCount());
         for (var v = 1; v <= instance.vehicleCount(); v++) {
-            vehicles.add(new VehicleSpec(
-                    v, instance.capacity(), Long.MAX_VALUE, 0, instance.horizonMinutes(), 0));
+            vehicles.add(new VehicleSpec(v, instance.capacity(), Long.MAX_VALUE, 0, instance.horizonMinutes(), 0));
         }
 
         final var matrix = DistanceMatrix.from(points, new EuclideanDistanceProvider());

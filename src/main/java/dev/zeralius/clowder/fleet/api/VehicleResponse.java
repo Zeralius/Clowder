@@ -12,5 +12,4 @@ public record VehicleResponse(
         LocalTime shiftStart,
         int shiftMinutes,
         BigDecimal avgSpeedKph,
-        boolean active
-) {}
+        boolean active) {}

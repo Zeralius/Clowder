@@ -32,12 +32,11 @@ class SolomonBenchmarkLoaderTest {
     void givesEveryVehicleTheHorizonAsItsShift() {
         var loaded = new SolomonBenchmarkLoader().load(fixture());
 
-        assertThat(loaded.instance().vehicles())
-                .allSatisfy(v -> {
-                    assertThat(v.shiftMinutes()).isEqualTo(230);
-                    assertThat(v.shiftStartMinutes()).isZero();
-                    assertThat(v.capacityGrams()).isEqualTo(200L);
-                });
+        assertThat(loaded.instance().vehicles()).allSatisfy(v -> {
+            assertThat(v.shiftMinutes()).isEqualTo(230);
+            assertThat(v.shiftStartMinutes()).isZero();
+            assertThat(v.capacityGrams()).isEqualTo(200L);
+        });
     }
 
     /** Windows come straight across as minutes; customer 1 is ready at 161, due at 171. */

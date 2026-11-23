@@ -7,5 +7,4 @@ package dev.zeralius.clowder.importer;
  * Euclidean distance — this is the one place in the system where a floating-point coordinate is
  * correct. Everything that accumulates (demand, times) is integral.
  */
-public record SolomonCustomer(
-        int id, double x, double y, long demand, int readyTime, int dueTime, int serviceTime) {}
+public record SolomonCustomer(int id, double x, double y, long demand, int readyTime, int dueTime, int serviceTime) {}

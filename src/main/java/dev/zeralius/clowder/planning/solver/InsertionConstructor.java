@@ -183,7 +183,9 @@ final class InsertionConstructor {
                 continue; // this customer fits nowhere in this route
             }
 
-            final var c2 = config.insertionLambda() * matrix.distance(depot, stops.get(candidate).index()) - bestC1;
+            final var c2 = config.insertionLambda()
+                            * matrix.distance(depot, stops.get(candidate).index())
+                    - bestC1;
 
             // Strict > keeps the lowest candidate position on a tie.
             if (c2 > bestC2) {

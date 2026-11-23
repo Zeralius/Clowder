@@ -49,13 +49,7 @@ class DivergenceIT {
         ingestion.record(
                 plan.id(),
                 new RecordEventRequest(
-                        key,
-                        plan.stops().get(stopIndex).id(),
-                        DriverEventType.DELIVERED,
-                        at,
-                        null,
-                        null,
-                        null));
+                        key, plan.stops().get(stopIndex).id(), DriverEventType.DELIVERED, at, null, null, null));
     }
 
     private Instant plannedDeparture(int stopIndex) {

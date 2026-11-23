@@ -50,8 +50,8 @@ class PlanProjectorTest {
     /** Ids are normally database-generated; here they stand for arrival order within one timestamp. */
     private static DriverEvent event(
             long id, Long stopId, DriverEventType type, int minutesAfterNine, FailureReason reason) {
-        final var event =
-                new DriverEvent("key-" + id, 1L, stopId, type, NINE.plusSeconds(minutesAfterNine * 60L), null, null, reason);
+        final var event = new DriverEvent(
+                "key-" + id, 1L, stopId, type, NINE.plusSeconds(minutesAfterNine * 60L), null, null, reason);
         setId(event, id);
         return event;
     }
@@ -97,9 +97,7 @@ class PlanProjectorTest {
         final var projection = projector.project(
                 1L,
                 STOPS,
-                List.of(
-                        event(2L, 10L, DriverEventType.DELIVERED, 58),
-                        event(1L, 10L, DriverEventType.ARRIVED, 50)));
+                List.of(event(2L, 10L, DriverEventType.DELIVERED, 58), event(1L, 10L, DriverEventType.ARRIVED, 50)));
 
         final var first = projection.stops().getFirst();
         assertThat(first.status()).isEqualTo(StopStatus.DELIVERED);
@@ -113,9 +111,7 @@ class PlanProjectorTest {
         final var projection = projector.project(
                 1L,
                 STOPS,
-                List.of(
-                        event(1L, 10L, DriverEventType.DELIVERED, 50),
-                        event(2L, 10L, DriverEventType.ARRIVED, 90)));
+                List.of(event(1L, 10L, DriverEventType.DELIVERED, 50), event(2L, 10L, DriverEventType.ARRIVED, 90)));
 
         assertThat(projection.stops().getFirst().status()).isEqualTo(StopStatus.DELIVERED);
     }
@@ -141,9 +137,7 @@ class PlanProjectorTest {
     @Test
     void aFailedStopIsCompleteAndKeepsItsReason() {
         final var projection = projector.project(
-                1L,
-                STOPS,
-                List.of(event(1L, 20L, DriverEventType.FAILED, 110, FailureReason.REFUSED)));
+                1L, STOPS, List.of(event(1L, 20L, DriverEventType.FAILED, 110, FailureReason.REFUSED)));
 
         final var second = projection.stops().get(1);
         assertThat(second.status()).isEqualTo(StopStatus.FAILED);
@@ -158,9 +152,7 @@ class PlanProjectorTest {
         final var projection = projector.project(
                 1L,
                 STOPS,
-                List.of(
-                        event(1L, 10L, DriverEventType.DELIVERED, 55),
-                        event(2L, 20L, DriverEventType.DELIVERED, 145)));
+                List.of(event(1L, 10L, DriverEventType.DELIVERED, 55), event(2L, 20L, DriverEventType.DELIVERED, 145)));
 
         assertThat(projection.currentDelayMinutes()).isEqualTo(25);
         assertThat(projection.lastCompletedStopId()).isEqualTo(20L);
@@ -170,8 +162,7 @@ class PlanProjectorTest {
     /** Running early is the same calculation with the other sign, not a special case. */
     @Test
     void runningEarlyIsANegativeDelay() {
-        final var projection =
-                projector.project(1L, STOPS, List.of(event(1L, 10L, DriverEventType.DELIVERED, 50)));
+        final var projection = projector.project(1L, STOPS, List.of(event(1L, 10L, DriverEventType.DELIVERED, 50)));
 
         assertThat(projection.currentDelayMinutes()).isEqualTo(-10);
     }
@@ -189,8 +180,7 @@ class PlanProjectorTest {
     /** A bad stop reference must not wedge the rest of the day. */
     @Test
     void anEventForAStopThatIsNotOnThisPlanIsIgnored() {
-        final var projection =
-                projector.project(1L, STOPS, List.of(event(1L, 999L, DriverEventType.DELIVERED, 60)));
+        final var projection = projector.project(1L, STOPS, List.of(event(1L, 999L, DriverEventType.DELIVERED, 60)));
 
         assertThat(projection.completed()).isZero();
         assertThat(projection.stops()).hasSize(3);
@@ -205,7 +195,9 @@ class PlanProjectorTest {
                         event(1L, 10L, DriverEventType.DELIVERED, 55),
                         event(2L, 20L, DriverEventType.FAILED, 110, FailureReason.ACCESS_DENIED)));
 
-        assertThat(projection.remainingStops()).extracting(StopState::planStopId).containsExactly(30L);
+        assertThat(projection.remainingStops())
+                .extracting(StopState::planStopId)
+                .containsExactly(30L);
         assertThat(projection.isFinished()).isFalse();
     }
 }

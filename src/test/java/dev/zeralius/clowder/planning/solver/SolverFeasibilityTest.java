@@ -22,7 +22,9 @@ class SolverFeasibilityTest {
                     .findFirst()
                     .orElseThrow();
 
-            assertThat(evaluator.evaluate(vehicle, route.stopPositions(), instance).violations())
+            assertThat(evaluator
+                            .evaluate(vehicle, route.stopPositions(), instance)
+                            .violations())
                     .as("route %s", route)
                     .isEmpty();
         }

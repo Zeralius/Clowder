@@ -59,8 +59,7 @@ class SolomonInstanceParserTest {
 
     @Test
     void toleratesIntegerFieldsWrittenWithoutDecimals() {
-        var text =
-                """
+        var text = """
                 TERSE
 
                 VEHICLE
@@ -82,8 +81,7 @@ class SolomonInstanceParserTest {
 
     @Test
     void rejectsAnInstanceWithNoDepotRow() {
-        var text =
-                """
+        var text = """
                 BROKEN
 
                 VEHICLE
@@ -103,8 +101,7 @@ class SolomonInstanceParserTest {
 
     @Test
     void rejectsATruncatedCustomerRow() {
-        var text =
-                """
+        var text = """
                 BROKEN
 
                 VEHICLE

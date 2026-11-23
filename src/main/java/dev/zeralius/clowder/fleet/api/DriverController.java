@@ -1,15 +1,13 @@
 package dev.zeralius.clowder.fleet.api;
 
-
 import dev.zeralius.clowder.common.web.PageResponse;
 import dev.zeralius.clowder.fleet.domain.DriverService;
 import jakarta.validation.Valid;
+import java.net.URI;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.net.URI;
 
 @RestController
 @RequestMapping("/api/drivers")
@@ -24,7 +22,8 @@ public class DriverController {
     @PostMapping
     ResponseEntity<DriverResponse> create(@Valid @RequestBody CreateDriverRequest request) {
         var created = drivers.create(request);
-        return ResponseEntity.created(URI.create("/api/drivers/" + created.id())).body(created);
+        return ResponseEntity.created(URI.create("/api/drivers/" + created.id()))
+                .body(created);
     }
 
     @GetMapping("/{id}")

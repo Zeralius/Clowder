@@ -70,8 +70,7 @@ final class RuinAndRecreate {
     }
 
     /** Pulls stops out one at a time, each from a route that still has something in it. */
-    private static List<Integer> ruin(
-            int[][] working, List<Integer> occupied, Random random, int count) {
+    private static List<Integer> ruin(int[][] working, List<Integer> occupied, Random random, int count) {
         final var removed = new ArrayList<Integer>(count);
 
         for (var i = 0; i < count; i++) {

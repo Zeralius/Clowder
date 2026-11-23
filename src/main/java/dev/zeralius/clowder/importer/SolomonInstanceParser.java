@@ -48,8 +48,8 @@ public final class SolomonInstanceParser {
         var vehicleMarker = indexOfLineStartingWith(lines, VEHICLE_MARKER);
         var fleet = splitOnWhitespace(lines.get(vehicleMarker + 1));
         if (fleet.length < 2) {
-            throw new IllegalArgumentException(
-                    "Expected 'count capacity' after the " + VEHICLE_MARKER + " header, got: " + lines.get(vehicleMarker + 1));
+            throw new IllegalArgumentException("Expected 'count capacity' after the " + VEHICLE_MARKER
+                    + " header, got: " + lines.get(vehicleMarker + 1));
         }
         var vehicleCount = parseIntLenient(fleet[0], "vehicle count");
         var capacity = parseLongLenient(fleet[1], "vehicle capacity");

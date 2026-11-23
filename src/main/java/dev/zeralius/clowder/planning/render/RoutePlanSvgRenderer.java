@@ -21,8 +21,8 @@ import java.util.Locale;
 public final class RoutePlanSvgRenderer {
 
     /** Colour-blind-safe qualitative palette (Paul Tol's "bright"); routes cycle through it. */
-    private static final List<String> PALETTE = List.of(
-            "#4477aa", "#ee6677", "#228833", "#ccbb44", "#66ccee", "#aa3377", "#bbbbbb", "#ee8866");
+    private static final List<String> PALETTE =
+            List.of("#4477aa", "#ee6677", "#228833", "#ccbb44", "#66ccee", "#aa3377", "#bbbbbb", "#ee8866");
 
     private static final int SIZE = 800;
     private static final int PADDING = 40;
@@ -38,7 +38,10 @@ public final class RoutePlanSvgRenderer {
         svg.append(String.format(
                 Locale.ROOT,
                 "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 %d %d\" width=\"%d\" height=\"%d\">%n",
-                SIZE, SIZE, SIZE, SIZE));
+                SIZE,
+                SIZE,
+                SIZE,
+                SIZE));
         svg.append("<rect width=\"100%\" height=\"100%\" fill=\"#ffffff\"/>\n");
 
         var colour = 0;
@@ -63,24 +66,21 @@ public final class RoutePlanSvgRenderer {
         svg.append(String.format(
                 Locale.ROOT,
                 "<rect x=\"%.1f\" y=\"%.1f\" width=\"12\" height=\"12\" fill=\"#000000\"/>%n",
-                depot[0] - 6, depot[1] - 6));
+                depot[0] - 6,
+                depot[1] - 6));
 
         svg.append("</svg>\n");
         return svg.toString();
     }
 
     private String polyline(
-            Route route,
-            ProblemInstance instance,
-            List<LatLon> points,
-            int depotIndex,
-            Bounds bounds,
-            String colour) {
+            Route route, ProblemInstance instance, List<LatLon> points, int depotIndex, Bounds bounds, String colour) {
 
         final var path = new StringBuilder();
         appendPoint(path, bounds.project(points.get(depotIndex)));
         for (var position : route.stopPositions()) {
-            appendPoint(path, bounds.project(points.get(instance.stopAt(position).index())));
+            appendPoint(
+                    path, bounds.project(points.get(instance.stopAt(position).index())));
         }
         appendPoint(path, bounds.project(points.get(depotIndex)));
 

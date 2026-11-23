@@ -14,10 +14,10 @@ public record LatLon(BigDecimal latitude, BigDecimal longitude) {
         Objects.requireNonNull(latitude, "latitude");
         Objects.requireNonNull(longitude, "longitude");
 
-        if(latitude.abs().compareTo(MAX_LAT) > 0) {
+        if (latitude.abs().compareTo(MAX_LAT) > 0) {
             throw new IllegalArgumentException("latitude out of range: " + latitude);
         }
-        if(longitude.abs().compareTo(MAX_LON) > 0) {
+        if (longitude.abs().compareTo(MAX_LON) > 0) {
             throw new IllegalArgumentException("longitude out of range: " + longitude);
         }
 
@@ -28,6 +28,7 @@ public record LatLon(BigDecimal latitude, BigDecimal longitude) {
     public static LatLon of(String lat, String lon) {
         return new LatLon(new BigDecimal(lat), new BigDecimal(lon));
     }
+
     public static LatLon of(double latitude, double longitude) {
         return new LatLon(BigDecimal.valueOf(latitude), BigDecimal.valueOf(longitude));
     }

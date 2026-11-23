@@ -73,6 +73,9 @@ class VehicleListingQueryCountIT {
     }
 
     private Statistics statistics() {
-        return entityManager.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        return entityManager
+                .getEntityManagerFactory()
+                .unwrap(SessionFactory.class)
+                .getStatistics();
     }
 }

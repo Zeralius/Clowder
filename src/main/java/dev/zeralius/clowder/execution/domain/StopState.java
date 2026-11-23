@@ -19,16 +19,14 @@ public record StopState(
     /** Precedence, not last-write-wins: a late ARRIVED must not undo a DELIVERED. */
     StopState withStatus(StopStatus newStatus, FailureReason reason) {
         return newStatus.outranks(status)
-                ? new StopState(
-                        planStopId, consignmentId, reference, newStatus, actualArrival, actualDeparture, reason)
+                ? new StopState(planStopId, consignmentId, reference, newStatus, actualArrival, actualDeparture, reason)
                 : this;
     }
 
     /** First arrival wins. A second ARRIVED is a retry or a re-approach, not a new fact. */
     StopState withArrival(Instant at) {
         return actualArrival == null
-                ? new StopState(
-                        planStopId, consignmentId, reference, status, at, actualDeparture, failureReason)
+                ? new StopState(planStopId, consignmentId, reference, status, at, actualDeparture, failureReason)
                 : this;
     }
 
