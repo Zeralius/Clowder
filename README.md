@@ -31,19 +31,28 @@ curl -X POST localhost:8080/api/import/solomon \
   --data-binary @benchmarks/solomon-100/In/RC101.txt
 
 # 2. Plan that depot-day. Use the depotId the import returned.
+#    Returns 202 with the run, including the id of the draft plan made for each vehicle.
 curl -X POST localhost:8080/api/plan-runs \
   -H 'Content-Type: application/json' \
   -d '{"depotId":1,"serviceDate":"2026-01-05","budgetSeconds":5}'
 
-# 3. The same run as a picture
+# 3. Read one of the draft plans that run produced, with the schedule for every stop
+curl localhost:8080/api/plans/1
+
+# 4. Publish it. This is the plan the driver gets, and it supersedes whatever was published
+#    for that vehicle on that day.
+curl -X POST localhost:8080/api/plans/1/publish
+
+# 5. The same solve as a picture
 curl -X POST localhost:8080/api/plan-runs/svg \
   -H 'Content-Type: application/json' \
   -d '{"depotId":1,"serviceDate":"2026-01-05","budgetSeconds":5}' > routes.svg
 ```
 
-A plan run gives you one entry per vehicle. Each stop carries the arrival, service start and
-departure time that the feasibility engine worked out, plus a list of any consignments that no
-vehicle could take.
+A plan run produces one draft plan per vehicle it used, and returns 202 with their ids. Each stop
+carries the arrival, service start and departure time the feasibility engine worked out, and the run
+itself lists any consignments no vehicle could take. Publishing is a separate step, so a dispatcher
+sees what the solver proposed before any driver does.
 
 ## The API
 
@@ -55,8 +64,12 @@ vehicle could take.
 | `GET POST` | `/api/consignments` | Create, and list by `serviceDate` with optional `depotId` |
 | `POST` | `/api/consignments/{id}/transitions` | Move one consignment through its lifecycle |
 | `POST` | `/api/import/solomon` | Import a raw Solomon instance file as `text/plain` |
-| `POST` | `/api/plan-runs` | Solve a depot-day and return routes with schedules |
+| `POST` | `/api/plan-runs` | Solve a depot-day, store a draft plan per vehicle. 202 plus `Location` |
+| `GET` | `/api/plan-runs/{id}` | One run: status, seed, solver version, plan ids, what it could not route |
 | `POST` | `/api/plan-runs/svg` | The same solve, drawn as SVG |
+| `GET` | `/api/plans/{id}` | One plan, with every stop and its planned times |
+| `GET` | `/api/plans?vehicleId=&serviceDate=` | Every version for a vehicle-day, newest first |
+| `POST` | `/api/plans/{id}/publish` | Publish a draft, superseding the version it replaces |
 
 All errors come back as RFC 9457 problem documents, so you always get `type`, `title`, `status` and
 `detail`, plus a field-level `errors` list when validation fails.
@@ -72,7 +85,7 @@ planning
   feasibility RouteEvaluator: every violation    enforced by an ArchUnit rule
   solver      I1 construction, then local search
   render      SVG
-  plan        the edge: entities to solver, and the HTTP resource
+  plan        the edge: entities to solver, stored plans, and the HTTP resources
 ```
 
 Two rules hold most of this up.
@@ -87,6 +100,46 @@ tested without starting a container, and why its whole test suite runs in well u
 `planning.plan` package is deliberately left out of that rule, because translating between the two
 worlds is exactly its job.
 
+## One published plan per vehicle per day
+
+A published plan is the document a driver works from, so two dispatchers must not be able to publish
+conflicting plans for the same vehicle on the same day. You could enforce that with a `SELECT` and
+then an `INSERT`, and it would be wrong: two dispatchers pressing publish in the same millisecond
+both see nothing published and both write.
+
+So the database enforces it instead.
+
+```sql
+create unique index uq_plan_published
+  on plan (vehicle_id, service_date)
+  where status = 'PUBLISHED';
+```
+
+Postgres indexes only the rows matching the predicate, so a vehicle-day may hold any number of
+drafts and superseded versions while at most one published row can exist. The rule is structurally
+impossible to break — not by a race, not by a bug in the service layer, not by an `UPDATE` typed into
+psql at 2am. `PlanPublishConcurrencyIT` releases twenty threads through a latch at the same instant
+and checks what is left: one published row, and one superseded row for every publish that got
+through after the first. It runs on real Postgres through Testcontainers, because H2 has no partial
+unique indexes and would pass for the wrong reason.
+
+There are two locking mechanisms on `plan` and they solve different problems:
+
+- the **partial unique index** stops two *different* plans both being published for one vehicle-day,
+  which is a race between rows;
+- **`@Version`** stops two dispatchers editing the *same* draft and one silently overwriting the
+  other, which is a race on one row.
+
+Publishing flushes twice rather than once. Hibernate may order the statements in a single flush as it
+likes, and writing the new published row before the old one is superseded means two rows are briefly
+published, which the index correctly refuses. Taking the old row out of the index first removes the
+question.
+
+A plan is also an artifact rather than a row that drifts: `publish()` only works on a draft,
+`supersede()` only on a published plan, there is no status setter, and a published plan refuses new
+stops. `plan_stop` stores the planned times, the reference and the address as a snapshot, so a
+consignment edited next week does not quietly rewrite what was planned last week.
+
 The most important design decision was separating *evaluating* a route from *searching* for one.
 `RouteEvaluator` takes a route and reports every constraint it violates, and it is the independent
 check. The solver has its own faster copy of that arithmetic for its inner loop, with a test that
@@ -96,8 +149,8 @@ back through the evaluator before it is handed out, so an infeasible plan cannot
 ## Building and testing
 
 ```bash
-./mvnw test     # 123 unit tests, no Docker needed
-./mvnw verify   # the above plus 44 integration tests on Testcontainers, needs Docker
+./mvnw test     # 152 unit tests, no Docker needed
+./mvnw verify   # the above plus 60 integration tests on Testcontainers, needs Docker
 ```
 
 The name decides which plugin runs a test. A `*Test` class runs under Surefire and must not touch a
@@ -219,16 +272,21 @@ and travel time equals distance because the vehicle speed is nominal and unused.
 ## Status
 
 Working so far: all four entities with full CRUD and consistent error shapes, the Solomon importer,
-the feasibility engine, the solver, the SVG renderer and the planning endpoint above.
+the feasibility engine, the solver, the SVG renderer, and plan runs stored as versioned, publishable
+plans with the publish rule enforced by the database.
 
 Not done yet, roughly in the order of how much they matter:
 
-- **Plans are not persisted.** `POST /api/plan-runs` solves and returns, but nothing is stored, so
-  there is no plan to publish, version, supersede or compare against. That is the next milestone,
-  and it brings a partial unique index that makes "one published plan per vehicle per day" a
-  database guarantee instead of a convention.
 - **No execution tracking.** No driver events, no idempotent ingestion, nothing that compares the
-  plan against what actually happened.
+  plan against what actually happened. That is the next milestone, and it reuses the feasibility
+  engine a third time: projected window misses come from running the evaluator over the stops a
+  driver has left, with the time they are actually running at.
+- **Publishing a plan does not move its consignments.** They stay `PENDING`, so replanning a day
+  that already has a published plan works, but the consignment lifecycle is not yet driven by
+  planning. Execution is where that starts to matter.
+- **A plan run holds the request thread.** It is shaped for a worker — 202, a `Location` header, a
+  run you poll — but the solve still happens inline, so a five second budget is a five second
+  request.
 - **The distance model is hard-coded to Euclidean** in the planning loader. Real depots need
   haversine, and that choice should be made per instance rather than per build.
 - **Depot has no update or deactivate**, because the table has no `active` column. Inventing a

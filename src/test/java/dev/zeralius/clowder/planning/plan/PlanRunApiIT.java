@@ -4,16 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.zeralius.clowder.TestcontainersConfiguration;
 import dev.zeralius.clowder.importer.SolomonImportService;
+import dev.zeralius.clowder.planning.plan.api.PlanResponse;
 import dev.zeralius.clowder.planning.plan.api.PlanRunRequest;
 import dev.zeralius.clowder.planning.plan.api.PlanRunResponse;
-import dev.zeralius.clowder.planning.plan.api.PlannedRouteResponse;
-import dev.zeralius.clowder.planning.plan.api.PlannedStopResponse;
+import dev.zeralius.clowder.planning.plan.api.PlanStopResponse;
+import dev.zeralius.clowder.planning.plan.domain.PlanRunStatus;
+import dev.zeralius.clowder.planning.plan.domain.PlanStatus;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,21 +24,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.client.RestTestClient;
 
 /**
- * The end-to-end path this project exists for: data in through the import API, a plan out through
- * the planning API. Until M4 persists plan runs, this is also the only proof that the solver is
- * reachable from outside its own package.
+ * The end-to-end path this project exists for: data in through the import API, a stored, versioned,
+ * publishable plan out through the planning API.
  *
- * <p>Not {@code @Transactional}: the import must commit before the server's own request thread can
- * see it, same reason {@code DepotApiIT} cannot wrap its requests.
+ * <p>Not {@code @Transactional}: the import must commit before the server request thread can see it,
+ * the same reason {@code DepotApiIT} cannot wrap its requests.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(TestcontainersConfiguration.class)
-@Sql("/db/testdata/depots.sql")
+@Sql("/db/testdata/plan-fixture.sql")
 class PlanRunApiIT {
 
     private static final LocalDate SERVICE_DATE = LocalDate.of(2026, 1, 5);
@@ -54,68 +57,113 @@ class PlanRunApiIT {
     }
 
     private static Reader fixture() {
-        var stream = Objects.requireNonNull(
-                PlanRunApiIT.class.getResourceAsStream("/solomon/MINI.txt"), "fixture missing");
+        final var stream =
+                Objects.requireNonNull(PlanRunApiIT.class.getResourceAsStream("/solomon/MINI.txt"), "fixture missing");
         return new InputStreamReader(stream, StandardCharsets.UTF_8);
     }
 
-    private PlanRunResponse planImportedInstance(Integer budgetSeconds) {
-        var imported = importer.importFrom(fixture(), SERVICE_DATE);
+    /** Imports the instance and solves it, returning the stored run. */
+    private PlanRunResponse run(Long seed) {
+        final var imported = importer.importFrom(fixture(), SERVICE_DATE);
+        return post(new PlanRunRequest(imported.depotId(), SERVICE_DATE, 2, seed));
+    }
 
+    private PlanRunResponse post(PlanRunRequest request) {
         return rest.post()
                 .uri("/api/plan-runs")
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(new PlanRunRequest(imported.depotId(), SERVICE_DATE, budgetSeconds, null))
+                .body(request)
+                .exchange()
+                .expectStatus()
+                .isAccepted()
+                .expectHeader()
+                .exists(HttpHeaders.LOCATION)
+                .expectBody(PlanRunResponse.class)
+                .returnResult()
+                .getResponseBody();
+    }
+
+    private PlanResponse plan(Long id) {
+        return rest.get()
+                .uri("/api/plans/" + id)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(PlanResponse.class)
+                .returnResult()
+                .getResponseBody();
+    }
+
+    private List<PlanResponse> plansOf(PlanRunResponse run) {
+        return run.planIds().stream().map(this::plan).toList();
+    }
+
+    @Test
+    void acceptsARunAndStoresADraftPlanPerVehicleUsed() {
+        final var run = run(null);
+
+        assertThat(run.id()).isNotNull();
+        assertThat(run.status()).isEqualTo(PlanRunStatus.SUCCEEDED);
+        assertThat(run.serviceDate()).isEqualTo(SERVICE_DATE);
+        assertThat(run.solverVersion()).isNotBlank();
+        assertThat(run.unassignedReferences()).isEmpty();
+        assertThat(run.finishedAt()).isAfterOrEqualTo(run.startedAt());
+        assertThat(run.elapsedMs()).isNotNull();
+        assertThat(run.planIds()).isNotEmpty().hasSizeBetween(1, 3);
+
+        assertThat(plansOf(run)).allSatisfy(plan -> {
+            assertThat(plan.status()).isEqualTo(PlanStatus.DRAFT);
+            assertThat(plan.versionNo()).isEqualTo(1);
+            assertThat(plan.publishedAt()).isNull();
+            assertThat(plan.stops()).isNotEmpty();
+            assertThat(plan.totalDistance()).isPositive();
+        });
+    }
+
+    /** Every one of the three consignments is on exactly one plan, with its reference snapshotted. */
+    @Test
+    void everyConsignmentIsPlannedExactlyOnce() {
+        final var references = plansOf(run(null)).stream()
+                .flatMap(plan -> plan.stops().stream())
+                .map(PlanStopResponse::reference)
+                .toList();
+
+        assertThat(references).containsExactlyInAnyOrder("MINI-001", "MINI-002", "MINI-003");
+    }
+
+    @Test
+    void theRunIsReadableBackAtItsOwnUrl() {
+        final var created = run(null);
+
+        final var fetched = rest.get()
+                .uri("/api/plan-runs/" + created.id())
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody(PlanRunResponse.class)
                 .returnResult()
                 .getResponseBody();
-    }
 
-    @Test
-    void importsAnInstanceAndPlansItOverHttp() {
-        var plan = planImportedInstance(2);
-
-        assertThat(plan.consignmentCount()).isEqualTo(3);
-        assertThat(plan.vehiclesAvailable()).isEqualTo(3);
-        assertThat(plan.vehiclesUsed()).isBetween(1, 3);
-        assertThat(plan.unassignedReferences()).isEmpty();
-        assertThat(plan.totalDistanceUnits()).isPositive();
-        assertThat(plan.solverVersion()).isNotBlank();
-
-        assertThat(plan.routes()).isNotEmpty();
-        assertThat(plan.routes()).allSatisfy(route -> {
-            assertThat(route.stopCount()).isPositive();
-            assertThat(route.stops()).hasSize(route.stopCount());
-        });
-
-        var planned = plan.routes().stream()
-                .flatMap(r -> r.stops().stream())
-                .map(PlannedStopResponse::reference)
-                .toList();
-        assertThat(planned).containsExactlyInAnyOrder("MINI-001", "MINI-002", "MINI-003");
+        assertThat(fetched.id()).isEqualTo(created.id());
+        assertThat(fetched.planIds()).isEqualTo(created.planIds());
+        assertThat(fetched.seed()).isEqualTo(created.seed());
     }
 
     /** Every stop carries a real schedule, in order, with service never starting before arrival. */
     @Test
     void everyStopCarriesAScheduleTheEvaluatorComputed() {
-        var plan = planImportedInstance(2);
-
-        for (var route : plan.routes()) {
-            assertThat(route.stops())
-                    .isSortedAccordingTo(Comparator.comparingInt(PlannedStopResponse::visitOrder));
+        for (final var plan : plansOf(run(null))) {
+            assertThat(plan.stops()).isSortedAccordingTo(Comparator.comparingInt(PlanStopResponse::sequenceNo));
 
             Instant previousDeparture = null;
-            for (var stop : route.stops()) {
-                assertThat(stop.serviceStart()).isAfterOrEqualTo(stop.arrival());
-                assertThat(stop.departure()).isAfterOrEqualTo(stop.serviceStart());
+            for (final var stop : plan.stops()) {
+                assertThat(stop.plannedServiceStart()).isAfterOrEqualTo(stop.plannedArrival());
+                assertThat(stop.plannedDeparture()).isAfterOrEqualTo(stop.plannedServiceStart());
                 assertThat(stop.waitMinutes()).isNotNegative();
                 if (previousDeparture != null) {
-                    assertThat(stop.arrival()).isAfterOrEqualTo(previousDeparture);
+                    assertThat(stop.plannedArrival()).isAfterOrEqualTo(previousDeparture);
                 }
-                previousDeparture = stop.departure();
+                previousDeparture = stop.plannedDeparture();
             }
         }
     }
@@ -123,23 +171,106 @@ class PlanRunApiIT {
     /** Customer 1 is ready at minute 161 of 2026-01-05 UTC, which is 02:41. */
     @Test
     void scheduleTimesAreRealInstantsOnTheServiceDate() {
-        var plan = planImportedInstance(2);
-
-        var first = plan.routes().stream()
-                .flatMap(r -> r.stops().stream())
-                .filter(s -> s.reference().equals("MINI-001"))
+        final var first = plansOf(run(null)).stream()
+                .flatMap(plan -> plan.stops().stream())
+                .filter(stop -> stop.reference().equals("MINI-001"))
                 .findFirst()
                 .orElseThrow();
 
-        assertThat(first.serviceStart()).isAfterOrEqualTo(Instant.parse("2026-01-05T02:41:00Z"));
-        assertThat(first.serviceStart()).isBeforeOrEqualTo(Instant.parse("2026-01-05T02:51:00Z"));
+        assertThat(first.plannedServiceStart()).isAfterOrEqualTo(Instant.parse("2026-01-05T02:41:00Z"));
+        assertThat(first.plannedServiceStart()).isBeforeOrEqualTo(Instant.parse("2026-01-05T02:51:00Z"));
+    }
+
+    @Test
+    void publishingADraftMakesItThePublishedPlanForThatVehicleDay() {
+        final var planId = run(null).planIds().getFirst();
+
+        final var published = rest.post()
+                .uri("/api/plans/" + planId + "/publish")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(PlanResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(published.status()).isEqualTo(PlanStatus.PUBLISHED);
+        assertThat(published.publishedAt()).isNotNull();
+        assertThat(plan(planId).status()).isEqualTo(PlanStatus.PUBLISHED);
+    }
+
+    /** Replanning the same day produces v2 and supersedes v1 rather than editing it. */
+    @Test
+    void replanningProducesASecondVersionThatSupersedesTheFirst() {
+        final var first = run(null);
+        final var firstPlanId = first.planIds().getFirst();
+        publish(firstPlanId);
+
+        final var vehicleId = plan(firstPlanId).vehicleId();
+
+        final var second = post(new PlanRunRequest(
+                first.depotId(), SERVICE_DATE, 2, null));
+        final var secondPlanId = plansOf(second).stream()
+                .filter(plan -> plan.vehicleId().equals(vehicleId))
+                .map(PlanResponse::id)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(plan(secondPlanId).versionNo()).isEqualTo(2);
+
+        publish(secondPlanId);
+
+        assertThat(plan(firstPlanId).status()).isEqualTo(PlanStatus.SUPERSEDED);
+        assertThat(plan(secondPlanId).status()).isEqualTo(PlanStatus.PUBLISHED);
+
+        final var versions = rest.get()
+                .uri("/api/plans?vehicleId=" + vehicleId + "&serviceDate=" + SERVICE_DATE)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(PlanResponse[].class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(versions).extracting(PlanResponse::versionNo).containsExactly(2, 1);
+    }
+
+    /** Publishing a superseded plan again is a 409, not a silent revival. */
+    @Test
+    void republishingASupersededPlanIsAConflict() {
+        final var first = run(null);
+        final var firstPlanId = first.planIds().getFirst();
+        publish(firstPlanId);
+
+        final var vehicleId = plan(firstPlanId).vehicleId();
+        final var second = post(new PlanRunRequest(first.depotId(), SERVICE_DATE, 2, null));
+        final var secondPlanId = plansOf(second).stream()
+                .filter(plan -> plan.vehicleId().equals(vehicleId))
+                .map(PlanResponse::id)
+                .findFirst()
+                .orElseThrow();
+        publish(secondPlanId);
+
+        rest.post()
+                .uri("/api/plans/" + firstPlanId + "/publish")
+                .exchange()
+                .expectStatus()
+                .isEqualTo(org.springframework.http.HttpStatus.CONFLICT);
+    }
+
+    private void publish(Long planId) {
+        rest.post()
+                .uri("/api/plans/" + planId + "/publish")
+                .exchange()
+                .expectStatus()
+                .isOk();
     }
 
     @Test
     void theSameRunRendersAsSvg() {
-        var imported = importer.importFrom(fixture(), SERVICE_DATE);
+        final var imported = importer.importFrom(fixture(), SERVICE_DATE);
 
-        var svg = rest.post()
+        final var svg = rest.post()
                 .uri("/api/plan-runs/svg")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(new PlanRunRequest(imported.depotId(), SERVICE_DATE, 2, null))
@@ -153,6 +284,7 @@ class PlanRunApiIT {
         assertThat(svg).startsWith("<svg").contains("<polyline").endsWith("</svg>\n");
     }
 
+    /** A bad depot is a bad request, not an accepted run that reports FAILED a moment later. */
     @Test
     void anUnknownDepotIsANotFound() {
         rest.post()
@@ -175,32 +307,44 @@ class PlanRunApiIT {
                 .isBadRequest();
     }
 
-    /** Same seed, same instance, same answer — the determinism guarantee, over HTTP. */
     @Test
-    void repeatingTheRequestReturnsTheSamePlan() {
-        var imported = importer.importFrom(fixture(), SERVICE_DATE);
-        var request = new PlanRunRequest(imported.depotId(), SERVICE_DATE, 2, 42L);
-
-        var first = post(request);
-        var second = post(request);
-
-        assertThat(second.totalDistance()).isEqualTo(first.totalDistance());
-        assertThat(second.vehiclesUsed()).isEqualTo(first.vehiclesUsed());
-        assertThat(second.routes()).extracting(PlannedRouteResponse::stops).isEqualTo(
-                first.routes().stream().map(PlannedRouteResponse::stops).toList());
-        assertThat(second.seed()).isEqualTo(42L);
+    void anUnknownPlanIsANotFound() {
+        rest.get().uri("/api/plans/999999").exchange().expectStatus().isNotFound();
     }
 
-    private PlanRunResponse post(PlanRunRequest request) {
-        return rest.post()
-                .uri("/api/plan-runs")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody(PlanRunResponse.class)
-                .returnResult()
-                .getResponseBody();
+    @Test
+    void anUnknownRunIsANotFound() {
+        rest.get().uri("/api/plan-runs/999999").exchange().expectStatus().isNotFound();
+    }
+
+    /** Same seed, same instance, same answer — the determinism guarantee, now over stored plans. */
+    @Test
+    void repeatingTheRequestStoresTheSamePlan() {
+        final var imported = importer.importFrom(fixture(), SERVICE_DATE);
+        final var request = new PlanRunRequest(imported.depotId(), SERVICE_DATE, 2, 42L);
+
+        final var first = post(request);
+        final var second = post(request);
+
+        assertThat(second.seed()).isEqualTo(42L);
+
+        final var firstStops = stopsOf(first);
+        assertThat(stopsOf(second)).isEqualTo(firstStops);
+        assertThat(totalDistance(second)).isEqualTo(totalDistance(first));
+
+        // Same vehicle-day, so the second run is version 2 of each plan.
+        assertThat(plansOf(second)).allSatisfy(plan -> assertThat(plan.versionNo()).isEqualTo(2));
+    }
+
+    private List<List<Long>> stopsOf(PlanRunResponse run) {
+        return plansOf(run).stream()
+                .map(plan -> plan.stops().stream()
+                        .map(PlanStopResponse::consignmentId)
+                        .toList())
+                .toList();
+    }
+
+    private long totalDistance(PlanRunResponse run) {
+        return plansOf(run).stream().mapToLong(PlanResponse::totalDistance).sum();
     }
 }

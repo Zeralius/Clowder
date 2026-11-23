@@ -12,4 +12,10 @@ import dev.zeralius.clowder.planning.model.ProblemInstance;
 public interface Solver {
 
     SolverResult solve(ProblemInstance instance, SolverConfig config);
+
+    /**
+     * Bump-on-change identifier for this implementation and its tuning. Readable before a solve so a
+     * plan run can record which solver it is about to use, not only which one it used.
+     */
+    String version();
 }

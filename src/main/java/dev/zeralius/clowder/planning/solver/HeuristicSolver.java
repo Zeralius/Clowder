@@ -26,6 +26,11 @@ public final class HeuristicSolver implements Solver {
     private final RouteEvaluator evaluator = new RouteEvaluator();
 
     @Override
+    public String version() {
+        return VERSION;
+    }
+
+    @Override
     public SolverResult solve(ProblemInstance instance, SolverConfig config) {
         final var startedAt = System.nanoTime();
         final var deadline = Deadline.startingNow(config.budget());
