@@ -9,10 +9,12 @@ import dev.zeralius.clowder.consignment.domain.ConsignmentStatus;
 import dev.zeralius.clowder.execution.PublishedPlanFixture;
 import dev.zeralius.clowder.execution.api.RecordEventRequest;
 import dev.zeralius.clowder.planning.plan.api.PlanResponse;
+import dev.zeralius.clowder.security.TestAuth;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,10 +41,17 @@ class ConsignmentLifecycleIT {
     @Autowired
     PublishedPlanFixture fixture;
 
+    @AfterEach
+    void clearTheCaller() {
+        TestAuth.clear();
+    }
+
     private PlanResponse plan;
 
     @BeforeEach
     void publishAPlan() {
+        // A dispatcher: these tests are about the mechanics, not about who may.
+        TestAuth.asDispatcher();
         plan = fixture.publishedPlan();
     }
 

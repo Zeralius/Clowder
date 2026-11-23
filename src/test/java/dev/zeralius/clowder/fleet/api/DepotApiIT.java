@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.zeralius.clowder.TestcontainersConfiguration;
 import dev.zeralius.clowder.common.web.PageResponse;
+import dev.zeralius.clowder.security.TestTokens;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
@@ -25,7 +27,7 @@ import org.springframework.test.web.servlet.client.RestTestClient;
  * transaction, so the test cannot wrap it — which is also why the seed script has to be idempotent.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, TestTokens.class})
 @Sql("/db/testdata/depots.sql")
 class DepotApiIT {
 
@@ -37,9 +39,16 @@ class DepotApiIT {
 
     private RestTestClient rest;
 
+    @Autowired
+    TestTokens tokens;
+
+    /** An admin: depots are reference data, and writing reference data is admin work. */
     @BeforeEach
     void bindToTheRunningServer() {
-        rest = RestTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
+        rest = RestTestClient.bindToServer()
+                .baseUrl("http://localhost:" + port)
+                .defaultHeader(org.springframework.http.HttpHeaders.AUTHORIZATION, tokens.bearerForAdmin())
+                .build();
     }
 
     @Test

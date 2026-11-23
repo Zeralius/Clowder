@@ -62,6 +62,23 @@ public class ArchitectureTest {
             .because("modules talk through facades and ids, never entities");
 
     /**
+     * Only the security module touches Spring Security.
+     *
+     * <p>Without this the {@code CurrentUser} facade is a suggestion: any service could reach for
+     * {@code SecurityContextHolder} and start making its own authorisation decisions, and then the
+     * answer to "who may do this?" would be spread across every module that happened to care. The
+     * rule is what keeps it in one place.
+     */
+    @ArchTest
+    static final ArchRule onlySecurityKnowsAboutSpringSecurity = noClasses()
+            .that()
+            .resideOutsideOfPackage("..security..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAnyPackage("org.springframework.security..")
+            .because("authorisation decisions go through the CurrentUser facade, not the context holder");
+
+    /**
      * Execution gets plans as DTOs through {@code PlanningFacade}. The rule is what makes that a
      * boundary rather than a preference: fold an event log over a planning entity once and the two
      * modules are welded together, and the projector stops being testable without a database.

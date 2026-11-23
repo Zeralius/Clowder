@@ -16,6 +16,7 @@ public record PlanResponse(
         Long planRunId,
         Long depotId,
         Long vehicleId,
+        Long driverId,
         LocalDate serviceDate,
         int versionNo,
         PlanStatus status,

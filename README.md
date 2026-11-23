@@ -27,27 +27,45 @@ docker compose up -d
 
 Then load a benchmark instance and plan it:
 
+Every call needs a bearer token. On a database with no accounts the first start creates an admin
+and prints a generated password once, so take it from the startup log.
+
 ```bash
+# 0. Get a token. Everything below sends it as `Authorization: Bearer $TOKEN`.
+TOKEN=$(curl -s -X POST localhost:8080/api/auth/token \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"<from the startup log>"}' | jq -r .token)
+
 # 1. Load 100 customers, 25 vehicles and a depot from a Solomon instance file
 curl -X POST localhost:8080/api/import/solomon \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: text/plain' \
   --data-binary @benchmarks/solomon-100/In/RC101.txt
 
 # 2. Plan that depot-day. Use the depotId the import returned.
 #    Returns 202 with the run, including the id of the draft plan made for each vehicle.
 curl -X POST localhost:8080/api/plan-runs \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"depotId":1,"serviceDate":"2026-01-05","budgetSeconds":5}'
 
 # 3. Read one of the draft plans that run produced, with the schedule for every stop
-curl localhost:8080/api/plans/1
+curl localhost:8080/api/plans/1 -H "Authorization: Bearer $TOKEN"
 
 # 4. Publish it. This is the plan the driver gets, and it supersedes whatever was published
 #    for that vehicle on that day.
-curl -X POST localhost:8080/api/plans/1/publish
+curl -X POST localhost:8080/api/plans/1/publish -H "Authorization: Bearer $TOKEN"
 
-# 5. The same solve as a picture
+# 5. Roster a driver onto it. Until this happens the plan belongs to no driver, and no driver
+#    account can read it or report against it.
+curl -X POST localhost:8080/api/plans/1/driver \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"driverId":1}'
+
+# 6. The same solve as a picture
 curl -X POST localhost:8080/api/plan-runs/svg \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"depotId":1,"serviceDate":"2026-01-05","budgetSeconds":5}' > routes.svg
 ```
@@ -68,22 +86,55 @@ by polling. The pool is small, bounded and CPU-sized; when its queue is full the
 
 ## The API
 
-| Method | Path | What it does |
-| --- | --- | --- |
-| `GET POST PUT DELETE` | `/api/depots`, `/api/depots/{id}` | Depot CRUD. `DELETE` deactivates, `POST /{id}/reactivate` undoes it |
-| `GET POST PUT DELETE` | `/api/vehicles` | Vehicle CRUD. `DELETE` deactivates |
-| `GET POST PUT DELETE` | `/api/drivers` | Driver CRUD. `DELETE` deactivates |
-| `GET POST` | `/api/consignments` | Create, and list by `serviceDate` with optional `depotId` |
-| `POST` | `/api/consignments/{id}/transitions` | Move one consignment through its lifecycle |
-| `POST` | `/api/import/solomon` | Import a raw Solomon instance file as `text/plain` |
-| `POST` | `/api/plan-runs` | Solve a depot-day, store a draft plan per vehicle. 202 plus `Location` |
-| `GET` | `/api/plan-runs/{id}` | One run: status, seed, solver version, plan ids, what it could not route |
-| `POST` | `/api/plan-runs/svg` | The same solve, drawn as SVG |
-| `GET` | `/api/plans/{id}` | One plan, with every stop and its planned times |
-| `GET` | `/api/plans?vehicleId=&serviceDate=` | Every version for a vehicle-day, newest first |
-| `POST` | `/api/plans/{id}/publish` | Publish a draft, superseding the version it replaces |
-| `POST` | `/api/plans/{id}/events` | Record what a driver reported. Idempotent: a retry returns the original |
-| `GET` | `/api/plans/{id}/tracking` | Progress, current delay, and the windows the rest of the route can no longer meet |
+| Method | Path | What it does | Who |
+| --- | --- | --- | --- |
+| `POST` | `/api/auth/token` | Username and password in, bearer token out | anyone |
+| `GET POST PUT DELETE` | `/api/users` | Account management. `DELETE` deactivates | admin |
+| `GET POST PUT DELETE` | `/api/depots`, `/api/depots/{id}` | Depot CRUD. `DELETE` deactivates, `POST /{id}/reactivate` undoes it | admin writes, all read |
+| `GET POST PUT DELETE` | `/api/vehicles` | Vehicle CRUD. `DELETE` deactivates | admin writes, all read |
+| `GET POST PUT DELETE` | `/api/drivers` | Driver CRUD. `DELETE` deactivates | admin writes, all read |
+| `GET POST` | `/api/consignments` | Create, and list by `serviceDate` with optional `depotId` | dispatcher |
+| `POST` | `/api/consignments/{id}/transitions` | Move one consignment through its lifecycle | dispatcher |
+| `POST` | `/api/import/solomon` | Import a raw Solomon instance file as `text/plain` | dispatcher |
+| `POST` | `/api/plan-runs` | Solve a depot-day, store a draft plan per vehicle. 202 plus `Location` | dispatcher |
+| `GET` | `/api/plan-runs/{id}` | One run: status, seed, solver version, plan ids, what it could not route | dispatcher |
+| `POST` | `/api/plan-runs/svg` | The same solve, drawn as SVG | dispatcher |
+| `GET` | `/api/plans/{id}` | One plan, with every stop and its planned times | its driver, or dispatcher |
+| `GET` | `/api/plans?vehicleId=&serviceDate=` | Every version for a vehicle-day, newest first | filtered per driver |
+| `POST` | `/api/plans/{id}/publish` | Publish a draft, superseding the version it replaces | dispatcher |
+| `POST` | `/api/plans/{id}/driver` | Roster a driver onto a plan | dispatcher |
+| `POST` | `/api/plans/{id}/events` | Record what a driver reported. Idempotent: a retry returns the original | its driver, or dispatcher |
+| `GET` | `/api/plans/{id}/tracking` | Progress, current delay, and the windows the rest of the route can no longer meet | its driver, or dispatcher |
+
+## Who may do what
+
+Three roles. An admin owns reference data and accounts, a dispatcher plans and publishes, a driver
+reports what happened. Everything is authenticated with a signed bearer token; there is no HTTP Basic
+fallback, because a second authentication path to keep correct is a poor trade for being able to type
+a password into curl.
+
+**Two kinds of rule, enforced in two places, and that split is the interesting part.** Role rules are
+about the URL, so they live in the filter chain: a driver posting to `/api/plan-runs` is refused
+before any application code runs. The ownership rule is not about the URL — the plan id is in the
+path and whose plan it is lives in the database — so it is enforced in the service that knows, and a
+rule in the filter chain that looked like it covered that would be worse than no rule at all.
+
+So: a driver may read and report against a plan rostered to them, and gets a 403 for anyone else's.
+An unassigned plan belongs to no driver, so no driver may touch it. A dispatcher may report on any
+plan, because entering events for a driver whose phone died in a basement car park is normal work
+rather than a workaround. Reassigning a plan moves access with the roster. The version list is
+filtered rather than refused, since a vehicle-day may hold versions that were someone else's before a
+reassignment and a 403 for the whole list would be useless.
+
+A few deliberate details. There is no default signing secret: unset it and the application refuses to
+start and says why, because a shipped default is one anybody who read the source can forge with. The
+token endpoint answers "invalid username or password" to a bad password, an unknown user and a
+deactivated account alike, and hashes against a dummy hash when the user does not exist so that it
+does not answer measurably faster for names that have no account. Passwords are bcrypt, hashing lives
+with the encoder so no caller can store a plaintext by accident, and no response carries a password,
+a hash, or a hint of either. An ArchUnit rule stops anything outside the security module touching
+`SecurityContextHolder`, which is what keeps "who may do this?" in one place instead of spread across
+every module that happens to care.
 
 All errors come back as RFC 9457 problem documents, so you always get `type`, `title`, `status` and
 `detail`, plus a field-level `errors` list when validation fails.
@@ -101,6 +152,7 @@ planning
   render      SVG
   plan        the edge: entities to solver, stored plans, and the HTTP resources
 execution     the driver event log, and plan against reality
+security      accounts, tokens, and who may do what
 ```
 
 Two rules hold most of this up.
@@ -234,8 +286,8 @@ park turns into a delivery.
 ## Building and testing
 
 ```bash
-./mvnw test     # 171 unit tests, no Docker needed
-./mvnw verify   # the above plus 115 integration tests on Testcontainers, needs Docker
+./mvnw test     # 172 unit tests, no Docker needed
+./mvnw verify   # the above plus 141 integration tests on Testcontainers, needs Docker
 ```
 
 The name decides which plugin runs a test. A `*Test` class runs under Surefire and must not touch a
@@ -395,6 +447,13 @@ Not done yet, roughly in the order of how much they matter:
   cursor pagination is not implemented.
 - **The event log has no retention policy.** It only grows, and at some point a day that closed six
   months ago wants archiving rather than indexing.
+- **Tokens cannot be revoked before they expire.** They are stateless and signed, so deactivating an
+  account stops new tokens rather than existing ones, for up to the eight hour lifetime. Refresh
+  tokens and a deny list are the usual answer and neither is here.
+- **The token endpoint is not rate limited.** Nothing slows down an attacker working through a
+  password list except bcrypt itself, which is something but is not a lockout.
+- **Nothing records who published what.** The plan says it was published and when, not by whom.
+  There is now an authenticated identity to attribute it to, so this is cheap and worth doing.
 
 ## Credits
 

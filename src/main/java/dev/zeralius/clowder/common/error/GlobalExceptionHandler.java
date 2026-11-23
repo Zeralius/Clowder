@@ -28,12 +28,26 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private static final URI NOT_FOUND_TYPE = URI.create("https://clowder.eu/errors/not-found");
     private static final URI CONFLICT_TYPE = URI.create("https://clowder.eu/errors/conflict");
     private static final URI VALIDATION_TYPE = URI.create("https://clowder.eu/errors/validation");
+    private static final URI FORBIDDEN_TYPE = URI.create("https://clowder.eu/errors/forbidden");
 
     @ExceptionHandler(NotFoundException.class)
     ProblemDetail handleNotFound(NotFoundException ex) {
         var problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problem.setTitle("Resource not found");
         problem.setType(NOT_FOUND_TYPE);
+        return problem;
+    }
+
+    /**
+     * 403, and the message says what was refused without saying what exists. "This plan is not
+     * assigned to you" is actionable; naming the driver it is assigned to would turn the endpoint
+     * into a way of enumerating the roster.
+     */
+    @ExceptionHandler(ForbiddenException.class)
+    ProblemDetail handleForbidden(ForbiddenException ex) {
+        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        problem.setTitle("Forbidden");
+        problem.setType(FORBIDDEN_TYPE);
         return problem;
     }
 

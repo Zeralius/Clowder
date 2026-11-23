@@ -48,6 +48,14 @@ public class Plan {
     @Column(name = "depot_id", nullable = false)
     private Long depotId;
 
+    /**
+     * The driver taking this plan out, or null until a dispatcher rosters one on. The solver assigns
+     * vehicles, not people, so a plan exists before anyone is named on it — and a plan with nobody on
+     * it belongs to no driver, which is what makes the authorisation answer "no" rather than "maybe".
+     */
+    @Column(name = "driver_id")
+    private Long driverId;
+
     @Column(name = "vehicle_id", nullable = false)
     private Long vehicleId;
 
@@ -115,6 +123,18 @@ public class Plan {
         stops.add(stop);
     }
 
+    /**
+     * Rostering is not a status change, so it is allowed on a draft and on a published plan alike: a
+     * driver going sick at 6am is reassigned, not replanned. Superseded and cancelled plans are
+     * history and do not get new drivers.
+     */
+    public void assignTo(Long driverId) {
+        if (status.isTerminal()) {
+            throw new ConflictException("Cannot assign a driver to plan %s: it is %s".formatted(id, status));
+        }
+        this.driverId = driverId;
+    }
+
     public void publish() {
         transitionTo(PlanStatus.PUBLISHED);
         this.publishedAt = Instant.now();
@@ -145,6 +165,10 @@ public class Plan {
 
     public Long getDepotId() {
         return depotId;
+    }
+
+    public Long getDriverId() {
+        return driverId;
     }
 
     public Long getVehicleId() {

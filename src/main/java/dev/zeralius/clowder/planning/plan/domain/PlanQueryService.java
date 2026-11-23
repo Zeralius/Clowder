@@ -1,5 +1,6 @@
 package dev.zeralius.clowder.planning.plan.domain;
 
+import dev.zeralius.clowder.common.error.ForbiddenException;
 import dev.zeralius.clowder.common.error.NotFoundException;
 import dev.zeralius.clowder.planning.PlanningFacade;
 import dev.zeralius.clowder.planning.plan.api.PlanResponse;
@@ -7,6 +8,7 @@ import dev.zeralius.clowder.planning.plan.api.PlanRunResponse;
 import dev.zeralius.clowder.planning.plan.api.PlanStopResponse;
 import dev.zeralius.clowder.planning.plan.persistence.PlanRepository;
 import dev.zeralius.clowder.planning.plan.persistence.PlanRunRepository;
+import dev.zeralius.clowder.security.CurrentUser;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -22,10 +24,12 @@ public class PlanQueryService implements PlanningFacade {
 
     private final PlanRunRepository runs;
     private final PlanRepository plans;
+    private final CurrentUser currentUser;
 
-    public PlanQueryService(PlanRunRepository runs, PlanRepository plans) {
+    public PlanQueryService(PlanRunRepository runs, PlanRepository plans, CurrentUser currentUser) {
         this.runs = runs;
         this.plans = plans;
+        this.currentUser = currentUser;
     }
 
     @Transactional(readOnly = true)
@@ -39,13 +43,41 @@ public class PlanQueryService implements PlanningFacade {
     @Transactional(readOnly = true)
     public PlanResponse findPlan(Long id) {
         final var plan = plans.findWithStopsById(id).orElseThrow(() -> new NotFoundException("Plan", id));
+        requireAccess(plan.getDriverId());
         return toResponse(plan);
     }
 
-    /** Every version for a vehicle-day, newest first, so the supersede chain is visible. */
+    /**
+     * A driver may read the plan they were given, and not anybody else. Dispatchers and admins read
+     * any of them. The rule itself lives on {@code AuthenticatedUser} so that this and the event
+     * ingestion path cannot disagree about what it is.
+     */
+    private void requireAccess(Long planDriverId) {
+        if (!currentUser.require().mayActOnPlanAssignedTo(planDriverId)) {
+            throw new ForbiddenException("This plan is not assigned to you");
+        }
+    }
+
+    /** Rostering a driver onto a plan. Dispatcher work, enforced in the filter chain. */
+    @Transactional
+    public PlanResponse assignDriver(Long planId, Long driverId) {
+        final var plan = plans.findWithStopsById(planId).orElseThrow(() -> new NotFoundException("Plan", planId));
+        plan.assignTo(driverId);
+        return toResponse(plan);
+    }
+
+    /**
+     * Every version for a vehicle-day, newest first, so the supersede chain is visible.
+     *
+     * <p>Filtered rather than refused for a driver: a vehicle-day may hold versions that were someone
+     * else's before a reassignment, and answering 403 for the whole list because of one of them would
+     * be useless. A driver sees their own versions; an empty list is a truthful answer.
+     */
     @Transactional(readOnly = true)
     public List<PlanResponse> findVersions(Long vehicleId, LocalDate serviceDate) {
+        final var user = currentUser.require();
         return plans.findWithStopsByVehicleIdAndServiceDateOrderByVersionNoDesc(vehicleId, serviceDate).stream()
+                .filter(plan -> user.mayActOnPlanAssignedTo(plan.getDriverId()))
                 .map(PlanQueryService::toResponse)
                 .toList();
     }
@@ -68,6 +100,7 @@ public class PlanQueryService implements PlanningFacade {
                 plan.getPlanRunId(),
                 plan.getDepotId(),
                 plan.getVehicleId(),
+                plan.getDriverId(),
                 plan.getServiceDate(),
                 plan.getVersionNo(),
                 plan.getStatus(),

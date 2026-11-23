@@ -18,3 +18,12 @@ spring:
 management:
   endpoints.web.exposure.include: health,info
   endpoint.health.show-details: always
+
+clowder:
+  security:
+    # No default. An empty value fails startup with an explanatory message, which is the right
+    # trade: a shipped default signing secret is one anybody who read the source can forge with.
+    jwt-secret: ${CLOWDER_JWT_SECRET:}
+    token-ttl: 8h
+    # Unset means the first start generates a password, logs it once and tells you to change it.
+    bootstrap-password: ${CLOWDER_BOOTSTRAP_PASSWORD:}

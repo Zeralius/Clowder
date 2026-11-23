@@ -10,6 +10,7 @@ import dev.zeralius.clowder.planning.plan.api.PlanRunResponse;
 import dev.zeralius.clowder.planning.plan.api.PlanStopResponse;
 import dev.zeralius.clowder.planning.plan.domain.PlanRunStatus;
 import dev.zeralius.clowder.planning.plan.domain.PlanStatus;
+import dev.zeralius.clowder.security.TestTokens;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
@@ -38,7 +39,7 @@ import org.springframework.test.web.servlet.client.RestTestClient;
  * the same reason {@code DepotApiIT} cannot wrap its requests.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, TestTokens.class})
 @Sql("/db/testdata/plan-fixture.sql")
 class PlanRunApiIT {
 
@@ -52,9 +53,16 @@ class PlanRunApiIT {
 
     private RestTestClient rest;
 
+    @Autowired
+    TestTokens tokens;
+
+    /** A dispatcher: planning and publishing are dispatcher work, and that is what these exercise. */
     @BeforeEach
     void bindToTheRunningServer() {
-        rest = RestTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
+        rest = RestTestClient.bindToServer()
+                .baseUrl("http://localhost:" + port)
+                .defaultHeader(HttpHeaders.AUTHORIZATION, tokens.bearerForDispatcher())
+                .build();
     }
 
     private static Reader fixture() {

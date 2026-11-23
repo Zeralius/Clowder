@@ -28,6 +28,9 @@
 		<java.version>21</java.version>
 		<spotless.version>2.46.1</spotless.version>
 		<palantir.version>2.102.0</palantir.version>
+		<!-- Test-only, and obviously so. Never read outside Surefire and Failsafe. -->
+		<test.jwt.secret>test-only-signing-secret-not-for-any-real-deployment</test.jwt.secret>
+		<test.bootstrap.password>test-only-bootstrap-password</test.bootstrap.password>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -49,6 +52,15 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<!-- Nimbus JOSE, for signing and verifying the tokens. No hand-rolled crypto. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
@@ -83,6 +95,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -140,9 +157,30 @@
 					</execution>
 				</executions>
 			</plugin>
+			<!--
+			  The signing secret for tests lives here rather than in a resource file, so that nothing
+			  on the classpath can be mistaken for production configuration. It is a test value and
+			  looks like one.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<systemPropertyVariables>
+						<clowder.security.jwt-secret>${test.jwt.secret}</clowder.security.jwt-secret>
+						<clowder.security.bootstrap-password>${test.bootstrap.password}</clowder.security.bootstrap-password>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>
+				<configuration>
+					<systemPropertyVariables>
+						<clowder.security.jwt-secret>${test.jwt.secret}</clowder.security.jwt-secret>
+						<clowder.security.bootstrap-password>${test.bootstrap.password}</clowder.security.bootstrap-password>
+					</systemPropertyVariables>
+				</configuration>
 				<executions>
 					<execution>
 						<goals>

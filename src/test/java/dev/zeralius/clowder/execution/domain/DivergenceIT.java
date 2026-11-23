@@ -7,8 +7,10 @@ import dev.zeralius.clowder.execution.PublishedPlanFixture;
 import dev.zeralius.clowder.execution.api.ProjectedMiss;
 import dev.zeralius.clowder.execution.api.RecordEventRequest;
 import dev.zeralius.clowder.planning.plan.api.PlanResponse;
+import dev.zeralius.clowder.security.TestAuth;
 import java.time.Duration;
 import java.time.Instant;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,10 +39,17 @@ class DivergenceIT {
     @Autowired
     PublishedPlanFixture fixture;
 
+    @AfterEach
+    void clearTheCaller() {
+        TestAuth.clear();
+    }
+
     private PlanResponse plan;
 
     @BeforeEach
     void publishAPlan() {
+        // A dispatcher: these tests are about the mechanics, not about who may.
+        TestAuth.asDispatcher();
         plan = fixture.publishedPlan();
         assertThat(plan.stops()).hasSize(3);
     }

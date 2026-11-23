@@ -7,11 +7,13 @@ import dev.zeralius.clowder.execution.PublishedPlanFixture;
 import dev.zeralius.clowder.execution.api.RecordEventRequest;
 import dev.zeralius.clowder.execution.persistence.DriverEventRepository;
 import dev.zeralius.clowder.planning.plan.api.PlanResponse;
+import dev.zeralius.clowder.security.TestAuth;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,12 +40,19 @@ class ProjectionRebuildIT {
     @Autowired
     PublishedPlanFixture fixture;
 
+    @AfterEach
+    void clearTheCaller() {
+        TestAuth.clear();
+    }
+
     private final PlanProjector projector = new PlanProjector();
 
     private PlanResponse plan;
 
     @BeforeEach
     void publishAPlanAndRunMostOfIt() {
+        // A dispatcher: these tests are about the mechanics, not about who may.
+        TestAuth.asDispatcher();
         plan = fixture.publishedPlan();
 
         final var first = plan.stops().get(0);

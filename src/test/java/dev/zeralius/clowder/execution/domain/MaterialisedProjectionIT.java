@@ -10,7 +10,9 @@ import dev.zeralius.clowder.execution.persistence.DriverEventRepository;
 import dev.zeralius.clowder.execution.persistence.PlanExecutionStateRepository;
 import dev.zeralius.clowder.execution.persistence.PlanStopStateRepository;
 import dev.zeralius.clowder.planning.plan.api.PlanResponse;
+import dev.zeralius.clowder.security.TestAuth;
 import java.time.Duration;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,12 +51,19 @@ class MaterialisedProjectionIT {
     @Autowired
     PublishedPlanFixture fixture;
 
+    @AfterEach
+    void clearTheCaller() {
+        TestAuth.clear();
+    }
+
     private final PlanProjector projector = new PlanProjector();
 
     private PlanResponse plan;
 
     @BeforeEach
     void publishAPlan() {
+        // A dispatcher: these tests are about the mechanics, not about who may.
+        TestAuth.asDispatcher();
         plan = fixture.publishedPlan();
     }
 

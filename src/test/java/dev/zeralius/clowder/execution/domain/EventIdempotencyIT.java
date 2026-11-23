@@ -10,7 +10,9 @@ import dev.zeralius.clowder.execution.PublishedPlanFixture;
 import dev.zeralius.clowder.execution.api.RecordEventRequest;
 import dev.zeralius.clowder.execution.persistence.DriverEventRepository;
 import dev.zeralius.clowder.planning.plan.api.PlanResponse;
+import dev.zeralius.clowder.security.TestAuth;
 import java.time.Instant;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +29,11 @@ import org.springframework.test.context.jdbc.Sql;
 @Sql("/db/testdata/depots.sql")
 class EventIdempotencyIT {
 
+    @AfterEach
+    void clearTheCaller() {
+        TestAuth.clear();
+    }
+
     private static final Instant OCCURRED = Instant.parse("2026-01-05T09:30:00Z");
 
     @Autowired
@@ -42,6 +49,8 @@ class EventIdempotencyIT {
 
     @BeforeEach
     void publishAPlan() {
+        // A dispatcher: these tests are about the mechanics, not about who may.
+        TestAuth.asDispatcher();
         plan = fixture.publishedPlan();
     }
 

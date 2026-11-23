@@ -9,6 +9,9 @@ delete from plan;
 delete from plan_run_unassigned;
 delete from plan_run;
 delete from consignment;
+-- Driver accounts reference driver rows. Accounts that are not linked to one are not fleet
+-- data and are left alone, which is what keeps the bootstrap admin usable across tests.
+delete from app_user where driver_id is not null;
 delete from driver;
 delete from vehicle;
 delete from depot;

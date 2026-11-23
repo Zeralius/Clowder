@@ -2,12 +2,14 @@ package dev.zeralius.clowder.planning.plan.api;
 
 import dev.zeralius.clowder.planning.plan.domain.PlanPublisher;
 import dev.zeralius.clowder.planning.plan.domain.PlanQueryService;
+import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -41,5 +43,11 @@ public class PlanController {
     @PostMapping("/{id}/publish")
     PlanResponse publish(@PathVariable Long id) {
         return publisher.publish(id);
+    }
+
+    /** Rostering a driver onto a plan. Not a status change: a driver going sick is reassigned. */
+    @PostMapping("/{id}/driver")
+    PlanResponse assignDriver(@PathVariable Long id, @Valid @RequestBody AssignDriverRequest request) {
+        return queries.assignDriver(id, request.driverId());
     }
 }

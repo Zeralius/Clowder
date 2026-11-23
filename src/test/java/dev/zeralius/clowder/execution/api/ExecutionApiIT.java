@@ -8,14 +8,18 @@ import dev.zeralius.clowder.execution.domain.DriverEventType;
 import dev.zeralius.clowder.execution.domain.FailureReason;
 import dev.zeralius.clowder.execution.domain.StopStatus;
 import dev.zeralius.clowder.planning.plan.api.PlanResponse;
+import dev.zeralius.clowder.security.TestAuth;
+import dev.zeralius.clowder.security.TestTokens;
 import java.time.Duration;
 import java.time.Instant;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.jdbc.Sql;
@@ -28,7 +32,7 @@ import org.springframework.test.web.servlet.client.RestTestClient;
  * it, the same reason the other API tests cannot wrap their requests.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import({TestcontainersConfiguration.class, PublishedPlanFixture.class})
+@Import({TestcontainersConfiguration.class, PublishedPlanFixture.class, TestTokens.class})
 @Sql("/db/testdata/depots.sql")
 class ExecutionApiIT {
 
@@ -41,10 +45,22 @@ class ExecutionApiIT {
     private RestTestClient rest;
     private PlanResponse plan;
 
+    @Autowired
+    TestTokens tokens;
+
     @BeforeEach
     void publishAPlan() {
-        rest = RestTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
+        rest = RestTestClient.bindToServer()
+                .baseUrl("http://localhost:" + port)
+                .defaultHeader(HttpHeaders.AUTHORIZATION, tokens.bearerForDispatcher())
+                .build();
+        TestAuth.asDispatcher();
         plan = fixture.publishedPlan();
+    }
+
+    @AfterEach
+    void clearTheCaller() {
+        TestAuth.clear();
     }
 
     private RecordEventRequest request(String key, Long stopId, DriverEventType type, Instant at) {
